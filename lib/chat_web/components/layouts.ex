@@ -1,4 +1,6 @@
 defmodule ChatWeb.Layouts do
+  @moduledoc "Layout components shared by the Chat web interface."
+
   use ChatWeb, :html
 
   attr :flash, :map, required: true

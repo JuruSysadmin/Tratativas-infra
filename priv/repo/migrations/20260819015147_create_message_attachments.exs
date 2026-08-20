@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateMessageAttachments do
+  @moduledoc "Database migration that creates the message attachments table."
+
   use Ecto.Migration
 
   def change do

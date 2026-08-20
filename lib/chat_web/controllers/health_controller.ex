@@ -1,4 +1,6 @@
 defmodule ChatWeb.HealthController do
+  @moduledoc "Health and readiness endpoints for the Chat service."
+
   use ChatWeb, :controller
 
   def health(conn, _params) do

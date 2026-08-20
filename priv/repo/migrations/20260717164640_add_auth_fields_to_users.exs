@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddAuthFieldsToUsers do
+  @moduledoc "Database migration that adds authentication fields to users."
+
   use Ecto.Migration
 
   def change do

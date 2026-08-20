@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateMessageRevisions do
+  @moduledoc "Database migration that creates immutable message revisions."
+
   use Ecto.Migration
 
   def change do

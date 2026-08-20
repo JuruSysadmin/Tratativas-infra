@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddExpiresAtToMessageAttachments do
+  @moduledoc "Database migration that adds expiration timestamps to attachments."
+
   use Ecto.Migration
 
   def up do

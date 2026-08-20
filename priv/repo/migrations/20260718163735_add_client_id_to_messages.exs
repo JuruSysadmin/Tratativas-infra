@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddClientIdToMessages do
+  @moduledoc "Database migration that adds client identifiers to messages."
+
   use Ecto.Migration
 
   def change do

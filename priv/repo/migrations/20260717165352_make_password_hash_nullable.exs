@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.MakePasswordHashNullable do
+  @moduledoc "Database migration that makes the user password hash nullable."
+
   use Ecto.Migration
 
   def change do

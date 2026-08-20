@@ -1,4 +1,6 @@
 defmodule ChatWeb.LoginLive do
+  @moduledoc "LiveView for the public Chat login screen."
+
   use ChatWeb, :live_view
 
   @impl true

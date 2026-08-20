@@ -1,4 +1,6 @@
 defmodule Chat.Treatments.Treatment do
+  @moduledoc "Ecto schema representing a Tratativa record."
+
   use Ecto.Schema
   import Ecto.Changeset
 

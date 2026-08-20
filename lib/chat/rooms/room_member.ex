@@ -1,4 +1,6 @@
 defmodule Chat.Rooms.RoomMember do
+  @moduledoc "Ecto schema for a user's membership in a Tratativa room."
+
   use Ecto.Schema
   import Ecto.Changeset
 

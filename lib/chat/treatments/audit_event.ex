@@ -1,4 +1,6 @@
 defmodule Chat.Treatments.AuditEvent do
+  @moduledoc "Ecto schema for immutable Tratativa audit events."
+
   use Ecto.Schema
   import Ecto.Changeset
 

@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.IncreaseMessageTimestampsPrecision do
+  @moduledoc "Database migration that increases message timestamp precision."
+
   use Ecto.Migration
 
   def change do

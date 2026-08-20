@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddOrderIdToRooms do
+  @moduledoc "Database migration that associates rooms with orders."
+
   use Ecto.Migration
 
   def change do

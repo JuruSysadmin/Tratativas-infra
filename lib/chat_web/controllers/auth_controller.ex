@@ -1,4 +1,6 @@
 defmodule ChatWeb.AuthController do
+  @moduledoc "HTTP endpoints for login and token refresh operations."
+
   use ChatWeb, :controller
 
   alias Chat.Auth.{External, Login, Token}

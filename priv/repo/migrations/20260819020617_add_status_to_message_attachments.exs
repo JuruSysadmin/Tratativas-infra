@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddStatusToMessageAttachments do
+  @moduledoc "Database migration that adds processing status to attachments."
+
   use Ecto.Migration
 
   def change do

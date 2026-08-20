@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateMessageMentions do
+  @moduledoc "Database migration that creates the message mentions table."
+
   use Ecto.Migration
 
   def change do

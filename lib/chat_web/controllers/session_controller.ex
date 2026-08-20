@@ -1,4 +1,6 @@
 defmodule ChatWeb.SessionController do
+  @moduledoc "Controller for creating and deleting browser sessions."
+
   use ChatWeb, :controller
 
   require Logger

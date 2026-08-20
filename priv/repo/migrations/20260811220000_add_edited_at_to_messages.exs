@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddEditedAtToMessages do
+  @moduledoc "Database migration that adds edit timestamps to messages."
+
   use Ecto.Migration
 
   def change do

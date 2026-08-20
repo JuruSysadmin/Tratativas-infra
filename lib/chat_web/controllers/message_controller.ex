@@ -1,4 +1,6 @@
 defmodule ChatWeb.MessageController do
+  @moduledoc "HTTP endpoints for listing, creating, and deleting messages."
+
   use ChatWeb, :controller
 
   alias Chat.Messages

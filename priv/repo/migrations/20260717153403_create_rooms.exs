@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateRooms do
+  @moduledoc "Database migration that creates the rooms table."
+
   use Ecto.Migration
 
   def change do

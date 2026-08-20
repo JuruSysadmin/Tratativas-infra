@@ -1,4 +1,6 @@
 defmodule ChatWeb.MessageAttachmentController do
+  @moduledoc "HTTP endpoints for presigning and confirming message attachments."
+
   use ChatWeb, :controller
 
   alias Chat.Messages.Attachments

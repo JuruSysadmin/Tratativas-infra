@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddDeletedAtToMessages do
+  @moduledoc "Database migration that adds soft-delete timestamps to messages."
+
   use Ecto.Migration
 
   def change do

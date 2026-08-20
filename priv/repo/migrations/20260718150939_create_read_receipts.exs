@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateReadReceipts do
+  @moduledoc "Database migration that creates the message read receipts table."
+
   use Ecto.Migration
 
   def change do

@@ -1,4 +1,6 @@
 defmodule Chat.Messages.RoomReadPosition do
+  @moduledoc "Ecto schema for tracking each user's read position in a room."
+
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}

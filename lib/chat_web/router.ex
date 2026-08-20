@@ -1,4 +1,6 @@
 defmodule ChatWeb.Router do
+  @moduledoc "Routes and request pipelines for the Chat web interface."
+
   use ChatWeb, :router
 
   import Phoenix.LiveView.Router

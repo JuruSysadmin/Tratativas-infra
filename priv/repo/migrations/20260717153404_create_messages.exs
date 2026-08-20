@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateMessages do
+  @moduledoc "Database migration that creates the messages table."
+
   use Ecto.Migration
 
   def change do

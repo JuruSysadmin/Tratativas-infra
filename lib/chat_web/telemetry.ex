@@ -1,4 +1,6 @@
 defmodule ChatWeb.Telemetry do
+  @moduledoc "Telemetry supervisor and metrics configuration for ChatWeb."
+
   use Supervisor
   import Telemetry.Metrics
 

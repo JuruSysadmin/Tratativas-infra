@@ -1,4 +1,6 @@
 defmodule Chat.Messages.RoomDeliveryPosition do
+  @moduledoc "Ecto schema for tracking message delivery positions in rooms."
+
   use Ecto.Schema
 
   @primary_key {:id, :binary_id, autogenerate: true}

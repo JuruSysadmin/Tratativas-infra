@@ -1,4 +1,6 @@
 defmodule ChatWeb.Endpoint do
+  @moduledoc "Phoenix endpoint that serves the Chat web application."
+
   use Phoenix.Endpoint, otp_app: :chat
 
   @session_options [

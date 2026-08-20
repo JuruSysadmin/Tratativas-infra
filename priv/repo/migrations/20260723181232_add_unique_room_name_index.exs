@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddUniqueRoomNameIndex do
+  @moduledoc "Database migration that enforces unique room names."
+
   use Ecto.Migration
 
   def up do

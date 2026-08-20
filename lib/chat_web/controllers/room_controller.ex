@@ -1,4 +1,6 @@
 defmodule ChatWeb.RoomController do
+  @moduledoc "HTTP endpoints for room membership and room operations."
+
   use ChatWeb, :controller
 
   alias Chat.Repo

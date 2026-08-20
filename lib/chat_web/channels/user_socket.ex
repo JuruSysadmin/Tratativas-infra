@@ -1,4 +1,6 @@
 defmodule ChatWeb.UserSocket do
+  @moduledoc "Phoenix socket entry point for authenticated user connections."
+
   use Phoenix.Socket
 
   alias Chat.Auth.Authenticator

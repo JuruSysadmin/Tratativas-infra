@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateTreatmentsAndAuditEvents do
+  @moduledoc "Database migration that creates Tratativa and audit event tables."
+
   use Ecto.Migration
 
   def change do

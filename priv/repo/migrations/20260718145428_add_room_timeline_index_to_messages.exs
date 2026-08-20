@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddRoomTimelineIndexToMessages do
+  @moduledoc "Database migration that adds an index for room message timelines."
+
   use Ecto.Migration
 
   def change do

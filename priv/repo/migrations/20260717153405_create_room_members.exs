@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateRoomMembers do
+  @moduledoc "Database migration that creates the room memberships table."
+
   use Ecto.Migration
 
   def change do

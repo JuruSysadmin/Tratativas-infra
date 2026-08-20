@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateUsers do
+  @moduledoc "Database migration that creates the users table."
+
   use Ecto.Migration
 
   def change do

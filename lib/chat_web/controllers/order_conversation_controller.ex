@@ -1,4 +1,6 @@
 defmodule ChatWeb.OrderConversationController do
+  @moduledoc "HTTP endpoints for order conversations and their Tratativa rooms."
+
   use ChatWeb, :controller
 
   alias Chat.Rooms

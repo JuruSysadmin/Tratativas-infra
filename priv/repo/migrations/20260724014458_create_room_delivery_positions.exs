@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.CreateRoomDeliveryPositions do
+  @moduledoc "Database migration that creates the room delivery positions table."
+
   use Ecto.Migration
 
   def change do

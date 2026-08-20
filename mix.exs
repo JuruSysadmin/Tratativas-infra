@@ -1,4 +1,6 @@
 defmodule Chat.MixProject do
+  @moduledoc "Mix project definition for the Chat application."
+
   use Mix.Project
 
   def project do

@@ -1,4 +1,6 @@
 defmodule Chat.Messages.ReadReceipt do
+  @moduledoc "Ecto schema for tracking message read receipts."
+
   use Ecto.Schema
   import Ecto.Changeset
 

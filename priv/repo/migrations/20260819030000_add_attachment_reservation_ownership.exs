@@ -1,4 +1,6 @@
 defmodule Chat.Repo.Migrations.AddAttachmentReservationOwnership do
+  @moduledoc "Database migration that adds attachment reservation ownership."
+
   use Ecto.Migration
 
   def up do
