@@ -59,3 +59,7 @@ priv/static/assets/
 
 # Figma Make
 .figma/
+
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
