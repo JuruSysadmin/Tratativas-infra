@@ -51,6 +51,7 @@ defmodule Chat.Accounts.User do
     ])
     |> validate_required([:email, :username])
     |> validate_inclusion(:role, @roles)
+    |> check_constraint(:role, name: :users_role_check)
     |> unique_constraint(:email)
     |> unique_constraint(:username)
     |> unique_constraint(:matricula)

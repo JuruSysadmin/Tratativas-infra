@@ -20,7 +20,7 @@ defmodule Chat.Auth.IdentityTest do
     assert user.matricula == "123"
     assert user.auth_provider == "external"
     assert user.auth_subject == "alice"
-    assert Map.get(user, :role) == "commercial"
+    assert user.role == "commercial"
   end
 
   test "preserves a locally assigned role during external synchronization" do
@@ -53,6 +53,20 @@ defmodule Chat.Auth.IdentityTest do
         role: "admin"
       })
 
+    assert "is invalid" in errors_on(changeset).role
+  end
+
+  test "maps the database role constraint to the changeset" do
+    changeset =
+      %User{}
+      |> Ecto.Changeset.change(
+        email: "database-role@example.com",
+        username: "database-role",
+        role: "admin"
+      )
+      |> Ecto.Changeset.check_constraint(:role, name: :users_role_check)
+
+    assert {:error, changeset} = Repo.insert(changeset)
     assert "is invalid" in errors_on(changeset).role
   end
 
