@@ -66,7 +66,7 @@ jobs:
       uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
       with:
         args: >-
-          -Dsonar.projectKey=${{ github.event.repository.name }}
+          -Dsonar.projectKey=JuruSysadmin_Tratativas-infra_5bd8a058-bff4-4513-8612-7448d4404ce3
           -Dsonar.projectName=${{ github.event.repository.name }}
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -1,5 +1,9 @@
 This is a web application written using the Phoenix web framework.
 
+## Related projects
+
+- **Frontend (React)**: The frontend application is located at `/home/jurusysadmin/chat/frontend`
+
 ## Makefile targets
 
 The project uses a Makefile (`make <target>`) for deployment and service management.
