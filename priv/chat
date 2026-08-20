@@ -1,0 +1,74 @@
+#!/bin/sh
+
+# PROVIDE: chat
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="chat"
+rcvar="chat_enable"
+
+load_rc_config "$name"
+
+: "${chat_enable:=NO}"
+: "${chat_root:=/opt/chat/current}"
+: "${chat_user:=chat}"
+: "${chat_group:=chat}"
+: "${chat_env_file:=/usr/local/etc/chat.env}"
+: "${chat_pidfile:=/var/run/chat/chat.pid}"
+: "${chat_log:=/var/log/chat/chat.log}"
+
+command="${chat_root}/bin/chat"
+pidfile="${chat_pidfile}"
+required_files="${command} ${chat_env_file}"
+
+chat_start()
+{
+    check_required_before_start || return 1
+
+    install -d -o "${chat_user}" -g "${chat_group}" -m 0750 "$(dirname "${chat_pidfile}")"
+    install -d -o "${chat_user}" -g "${chat_group}" -m 0750 "$(dirname "${chat_log}")"
+
+    set -a
+    . "${chat_env_file}"
+    PHX_SERVER=true
+    HOME="/var/run/${name}"
+    export PHX_SERVER
+    export HOME
+    set +a
+
+    /usr/sbin/daemon \
+        -p "${chat_pidfile}" \
+        -u "${chat_user}" \
+        -o "${chat_log}" \
+        "${command}" \
+        start
+}
+
+chat_stop()
+{
+    if [ -r "${pidfile}" ]; then
+        kill -TERM "$(cat "${pidfile}")"
+    else
+        echo "${name} is not running"
+    fi
+}
+
+check_required_before_start()
+{
+    if [ ! -x "${command}" ]; then
+        echo "${name}: release executable not found: ${command}" >&2
+        return 1
+    fi
+
+    if [ ! -r "${chat_env_file}" ]; then
+        echo "${name}: environment file not found: ${chat_env_file}" >&2
+        return 1
+    fi
+}
+
+start_cmd="chat_start"
+stop_cmd="chat_stop"
+
+run_rc_command "$1"

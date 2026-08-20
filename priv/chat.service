@@ -1,0 +1,33 @@
+[Unit]
+Description=Chat Application
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=chat
+Group=chat
+WorkingDirectory=/opt/chat
+
+EnvironmentFile=/etc/chat/chat.env
+Environment=PHX_SERVER=true
+
+ExecStart=/opt/chat/bin/chat start
+ExecStop=/opt/chat/bin/chat stop
+
+Restart=on-failure
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=chat
+
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+LimitNOFILE=65536
+LimitNPROC=65536
+
+[Install]
+WantedBy=multi-user.target

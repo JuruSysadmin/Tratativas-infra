@@ -1,0 +1,26 @@
+<% login_error = Phoenix.Flash.get(@flash, :error) %>
+<Layouts.app flash={Map.delete(@flash, "error")}>
+<main class="login-container" aria-labelledby="login-title">
+  <div class="login-card">
+    <div class="login-intro">
+      <h1 id="login-title">Entrar</h1>
+      <p>Entre no MetroBEAM</p>
+    </div>
+
+    <Layouts.inline_error_notification :if={login_error} message={login_error} />
+
+    <form class="fluid-form login-fluid-form" action={~p"/session"} method="post">
+      <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
+      <.input name="username" label="Usuário" value={@username} placeholder="Nome de usuário" autocomplete="username" autofocus required />
+      <.input name="password" label="Senha" type="password" value="" placeholder="Senha" autocomplete="current-password" required />
+
+      <div class="fluid-actions login-fluid-actions">
+        <button type="submit" class="btn btn-primary login-submit-button">Entrar</button>
+      </div>
+    </form>
+  </div>
+  <footer class="login-footer" data-app-version={@app_version}>
+    Versão {@app_version}
+  </footer>
+</main>
+</Layouts.app>

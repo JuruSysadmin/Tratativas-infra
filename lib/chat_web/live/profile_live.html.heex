@@ -1,0 +1,37 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="profile-page">
+    <a class="skip-to-content" href="#main-content">Pular para o conteúdo principal</a>
+
+    <.topbar />
+
+    <main class="profile-main" id="main-content">
+      <header class="profile-header">
+        <.icon name="carbon-user" class="profile-header-icon" />
+        <h1 class="profile-title">Meu perfil</h1>
+      </header>
+
+      <dl class="profile-card">
+        <div class="profile-row">
+          <dt class="profile-label">Usuário</dt>
+          <dd class="profile-value"><%= @current_user.username %></dd>
+        </div>
+        <div class="profile-row">
+          <dt class="profile-label">E-mail</dt>
+          <dd class="profile-value"><%= @current_user.email %></dd>
+        </div>
+        <div class="profile-row">
+          <dt class="profile-label">Matrícula</dt>
+          <dd class="profile-value"><%= @current_user.matricula || "—" %></dd>
+        </div>
+        <div class="profile-row">
+          <dt class="profile-label">Cód. vendedor</dt>
+          <dd class="profile-value"><%= @current_user.codusur || "—" %></dd>
+        </div>
+        <div class="profile-row">
+          <dt class="profile-label">Filial</dt>
+          <dd class="profile-value"><%= @current_user.filial || "—" %></dd>
+        </div>
+      </dl>
+    </main>
+  </div>
+</Layouts.app>

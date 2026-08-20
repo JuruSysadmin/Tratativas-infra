@@ -1,0 +1,140 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <main class="treatment-page" id="main-content">
+    <div class="treatment-page-header">
+      <div>
+        <p class="treatment-eyebrow">Tratativa de pedidos</p>
+        <h1>Pedidos do cliente {@customer_id}</h1>
+      </div>
+      <.link class="btn btn-ghost" navigate={~p"/chat"}>Voltar ao chat</.link>
+    </div>
+
+    <div class="treatment-order-list">
+        <article
+          :for={treatment <- @treatments}
+          id={"treatment-order-#{treatment.order.order_id}"}
+          class="treatment-order-card"
+        >
+        <div class="treatment-order-card-header">
+          <div>
+            <h2>Pedido #{treatment.order.order_id}</h2>
+            <p>{treatment.order.customer_name}</p>
+          </div>
+          <div class="treatment-order-badges">
+            <span class="treatment-order-type">
+              {ChatWeb.OrderPresentation.type_label(treatment.order.order_type)}
+            </span>
+            <div
+              :if={treatment.delivery && Map.get(treatment.delivery, :delivery_priority) in ["Alta", "Média", "Baixa"]}
+              class="delivery-priority"
+            >
+              <span class="delivery-priority-label">Prioridade:</span>
+              <span
+                class="delivery-priority-badge"
+                data-priority={treatment.delivery.delivery_priority}
+              >
+                {treatment.delivery.delivery_priority}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <dl class="treatment-order-summary">
+          <div>
+            <dt>Status do pedido</dt>
+            <dd>{treatment.order.status}</dd>
+          </div>
+          <div>
+            <dt>Status da entrega</dt>
+            <dd>{if treatment.delivery, do: treatment.delivery.status, else: "-"}</dd>
+          </div>
+          <div>
+            <dt>Valor</dt>
+            <dd>R$ {:erlang.float_to_binary(treatment.order.amount, decimals: 2)}</dd>
+          </div>
+          <div>
+            <dt>Entrega</dt>
+            <dd>{if treatment.delivery, do: treatment.delivery.delivery.place, else: "-"}</dd>
+          </div>
+        </dl>
+
+        <section class="treatment-detail-section" aria-labelledby={"customer-#{treatment.order.order_id}"}>
+          <h3 id={"customer-#{treatment.order.order_id}"}>Cliente</h3>
+          <dl class="treatment-customer-details">
+            <div>
+              <dt>Cliente</dt>
+              <dd>{treatment.order.customer_name}</dd>
+            </div>
+            <div>
+              <dt>Local de entrega</dt>
+              <dd>{treatment.order.delivery.place}</dd>
+            </div>
+            <div>
+              <dt>Cidade</dt>
+              <dd>{treatment.order.delivery.city}/{treatment.order.delivery.state}</dd>
+            </div>
+            <div>
+              <dt>Transportadora</dt>
+              <dd>{treatment.order.delivery.carrier}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="treatment-detail-section" aria-labelledby={"items-#{treatment.order.order_id}"}>
+          <h3 id={"items-#{treatment.order.order_id}"}>Itens do pedido</h3>
+          <div class="treatment-item-list">
+            <div :for={item <- treatment.order.items} class="treatment-item-row">
+              <div>
+                <strong>{item.description}</strong>
+                <span>{item.brand} · {item.department}</span>
+              </div>
+              <div>
+                <span>{item.quantity} unidade(s)</span>
+                <strong>R$ {:erlang.float_to_binary(item.total, decimals: 2)}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="treatment-order-card-footer">
+          <button
+            type="button"
+            class="btn btn-primary"
+            phx-click="open_treatment"
+            phx-value-order_id={treatment.order.order_id}
+          >
+            Abrir tratativa
+          </button>
+        </div>
+        </article>
+    </div>
+
+    <section
+      :if={@selected_treatment}
+      class="treatment-audit-panel"
+      aria-labelledby="treatment-audit-title"
+    >
+      <div class="treatment-audit-header">
+        <div>
+          <p class="treatment-eyebrow">Acompanhamento</p>
+          <h2 id="treatment-audit-title">
+            {Chat.Treatments.protocol(@selected_treatment)}
+          </h2>
+          <p>Pedido #{@selected_treatment.order_id} · Status: {@selected_treatment.status}</p>
+        </div>
+        <.link class="btn btn-primary" navigate={@selected_chat_path}>
+          Abrir conversa
+        </.link>
+      </div>
+
+      <ol class="treatment-audit-timeline">
+        <li :for={event <- @audit_events} id={"treatment-audit-event-#{event.id}"}>
+          <time datetime={DateTime.to_iso8601(event.inserted_at)}>
+            {Calendar.strftime(event.inserted_at, "%d/%m/%Y %H:%M")}
+          </time>
+          <strong>{event.event_type}</strong>
+          <span>por {event.actor.username}</span>
+        </li>
+      </ol>
+    </section>
+  </main>
+</Layouts.app>

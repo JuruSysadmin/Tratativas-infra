@@ -1,0 +1,76 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="chat-page" id="chat-page" phx-hook="NotificationSound">
+    <.ui_shell_header
+      username={@current_user.username}
+      navigation_open={@navigation_open}
+      notification_count={@mention_unread_count}
+      notification_panel_open={@notification_panel_open}
+    />
+
+    <.notification_panel
+      :if={@notification_panel_open}
+      notifications={@mention_notifications}
+    />
+
+    <.mention_notification_toast notification={@mention_toast} />
+
+    <div class="chat-body">
+      <.room_sidebar
+        rooms={@rooms}
+        current_room={@current_room}
+        unread_counts={@unread_counts}
+        mention_unread_counts={@mention_unread_counts}
+        mention_unread_count={@mention_unread_count}
+        navigation_open={@navigation_open}
+      />
+
+      <.chat_area
+        current_room={@current_room}
+        current_user={@current_user}
+        messages={@streams.messages}
+        has_more_messages={@has_more_messages}
+        pending_messages={@pending_messages}
+        pending_message_order={@pending_message_order}
+        status_messages={@status_messages}
+        typing_users={@typing_users}
+        input_text={@input_text}
+        mention_suggestions={@mention_suggestions}
+        message_statuses={@message_statuses}
+        rooms={@rooms}
+        online_users={@online_users}
+      />
+
+      <.message_delete_dialog message_id={Map.get(assigns, :pending_message_deletion_id)} />
+
+      <.message_edit_dialog
+        message_id={Map.get(assigns, :editing_message_id)}
+        content={Map.get(assigns, :editing_content, "")}
+      />
+
+      <.presence_panel
+        current_user={@current_user}
+        current_room={@current_room}
+        online_users={@online_users}
+      />
+    </div>
+
+    <div
+      id="connection-status"
+      class="connection-status"
+      role="status"
+      aria-live="polite"
+      phx-hook="ConnectionStatus"
+      data-connection-state="connected"
+      hidden
+    >
+      Conexão estabelecida.
+    </div>
+
+    <.room_modal
+      dialog={@room_dialog}
+      pending_room={@pending_room}
+      available_rooms={@available_rooms}
+      room_search={@room_search}
+    />
+  </div>
+</Layouts.app>

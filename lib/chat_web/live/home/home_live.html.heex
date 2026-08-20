@@ -1,0 +1,23 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="home-page">
+    <a class="skip-to-content" href="#main-content">Pular para o conteúdo principal</a>
+
+    <.topbar />
+
+    <main class="home-main" id="main-content">
+      <h1 class="home-title">Hello World!</h1>
+      <p class="home-greeting">Bem-vindo, {@current_user.username}!</p>
+
+      <nav class="home-menu" aria-label="Menu">
+        <a class="home-menu-link" href={~p"/chat"} aria-label="Chat" title="Chat">
+          <.icon name="carbon-chat" class="home-menu-icon" />
+          <span class="home-menu-label">Chat</span>
+        </a>
+        <a class="home-menu-link" href="/perfil" aria-label="Perfil" title="Perfil">
+          <.icon name="carbon-user" class="home-menu-icon" />
+          <span class="home-menu-label">Perfil</span>
+        </a>
+      </nav>
+    </main>
+  </div>
+</Layouts.app>

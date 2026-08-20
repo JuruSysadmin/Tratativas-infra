@@ -1,0 +1,29 @@
+## Name of the node
+-name chat@127.0.0.1
+
+## Cookie for distributed erlang
+-setcookie ${ERLANG_COOKIE}
+
+## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive
+## (Alarm handler is responsible for taking action)
+-heart
+
+## Enable kernel poll and target 64 schedulers
+## This improves performance under concurrent load
++K true
++A 64
+
+## Enable SMP automatically based on number of available processors
+-smp auto
+
+## Increase number of concurrent ports/sockets
+-env ERL_MAX_PORTS 65536
+
+## Tweak GC to be lazy (use less memory at the cost of more CPU)
+-env ERL_FULLSWEEP_AFTER 10
+
+## Set the maximum number of simultaneously existing processes
++P 2097152
+
+## Set the maximum number of simultaneously existing ETS tables
++e 65536
