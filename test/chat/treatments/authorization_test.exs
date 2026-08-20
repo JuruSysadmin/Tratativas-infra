@@ -17,25 +17,20 @@ defmodule Chat.Treatments.AuthorizationTest do
     assert Enum.all?(@permissions, &Authorization.allowed?(user, &1))
   end
 
-  test "commercial users cannot assign or unassign treatments" do
+  test "commercial users can only reopen treatments for now" do
     user = %User{role: "commercial"}
 
     refute Authorization.allowed?(user, "treatment.assign")
-    refute Authorization.allowed?(user, "treatment.unassign")
-  end
-
-  test "commercial users can resolve and reopen treatments" do
-    user = %User{role: "commercial"}
-
-    assert Authorization.allowed?(user, "treatment.resolve")
+    refute Authorization.allowed?(user, "treatment.resolve")
     assert Authorization.allowed?(user, "treatment.reopen")
+    refute Authorization.allowed?(user, "treatment.unassign")
   end
 
   test "denied permissions return a stable authorization error" do
     user = %User{role: "commercial"}
 
     assert {:error, :forbidden} = Authorization.authorize(user, "treatment.assign")
-    assert :ok = Authorization.authorize(user, "treatment.resolve")
+    assert :ok = Authorization.authorize(user, "treatment.reopen")
   end
 
   test "unknown roles and permissions are denied" do

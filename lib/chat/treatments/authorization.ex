@@ -17,7 +17,7 @@ defmodule Chat.Treatments.Authorization do
   ]
 
   @role_permissions %{
-    "commercial" => ["treatment.resolve", "treatment.reopen"],
+    "commercial" => ["treatment.reopen"],
     "logistics_agent" => @permissions
   }
 
