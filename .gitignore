@@ -27,13 +27,15 @@ erl_crash.dump
 # Ignore package tarball (built via `mix hex.build`).
 chat-*.tar
 
+# Local AI assistant configuration.
+/.claude/
+/.cursor/
+
 # Environment variables
 .env
 .env.*
 /usuario.txt
-
 deploy/*.local.sh
-
 youtrack.md
 
 # SonarQube
