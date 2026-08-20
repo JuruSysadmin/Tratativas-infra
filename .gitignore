@@ -30,6 +30,7 @@ chat-*.tar
 # Environment variables
 .env
 .env.*
+/usuario.txt
 
 deploy/*.local.sh
 

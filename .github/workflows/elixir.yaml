@@ -30,6 +30,9 @@ jobs:
 
     runs-on: ubuntu-latest
     name: Test on OTP ${{ matrix.otp }} / Elixir ${{ matrix.elixir }}
+    env:
+      HERMES_TEST_USERNAME: ${{ secrets.HERMES_TEST_USERNAME }}
+      HERMES_TEST_PASSWORD: ${{ secrets.HERMES_TEST_PASSWORD }}
     strategy:
       matrix:
         otp: ["29.0"]
