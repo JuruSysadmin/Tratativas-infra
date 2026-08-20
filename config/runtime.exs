@@ -82,8 +82,6 @@ if config_env() == :prod do
     System.get_env("MESSAGE_ATTACHMENT_S3_BUCKET") ||
       raise "MESSAGE_ATTACHMENT_S3_BUCKET is missing"
 
-
-
   config :chat, :message_attachment_storage,
     bucket: attachment_bucket,
     region:
