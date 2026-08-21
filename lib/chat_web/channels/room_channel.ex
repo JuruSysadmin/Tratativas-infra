@@ -6,7 +6,10 @@ defmodule ChatWeb.RoomChannel do
   alias Chat.Accounts
   alias Chat.Messages
   alias Chat.Messages.Attachments
+  alias Chat.Repo
   alias Chat.Rooms
+  alias Chat.Treatments
+  alias Chat.Treatments.Treatment
   alias ChatWeb.Presence
 
   @impl true
@@ -153,6 +156,26 @@ defmodule ChatWeb.RoomChannel do
     {:reply, {:error, %{reason: "invalid_message"}}, socket}
   end
 
+  def handle_in("treatment:assign_to_me", _params, socket) do
+    case Repo.get_by(Treatment, room_id: socket.assigns.room_id) do
+      nil ->
+        {:reply, {:error, %{reason: "not_found"}}, socket}
+
+      treatment ->
+        case Treatments.assign_agent(treatment, socket.assigns.current_user) do
+          {:ok, assigned_treatment} ->
+            payload = treatment_assignment_payload(assigned_treatment)
+
+            maybe_broadcast_treatment_assignment(socket, treatment, payload)
+
+            {:reply, {:ok, payload}, socket}
+
+          {:error, reason} when reason in [:forbidden, :already_assigned, :not_found] ->
+            {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+        end
+    end
+  end
+
   def handle_in("typing:start", _params, socket) do
     Presence.update_typing(socket, socket.assigns.current_user, true)
     {:noreply, socket}
@@ -194,4 +217,22 @@ defmodule ChatWeb.RoomChannel do
       attachments: Attachments.message_payload_attachments(message)
     }
   end
+
+  defp treatment_assignment_payload(treatment) do
+    %{
+      treatment_id: treatment.id,
+      assigned_agent_id: treatment.assigned_agent_id,
+      assigned_at: treatment.assigned_at
+    }
+  end
+
+  defp maybe_broadcast_treatment_assignment(
+         socket,
+         %Treatment{assigned_agent_id: nil},
+         payload
+       ) do
+    broadcast!(socket, "treatment:agent_assigned", payload)
+  end
+
+  defp maybe_broadcast_treatment_assignment(_socket, %Treatment{}, _payload), do: :ok
 end

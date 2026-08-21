@@ -6,6 +6,7 @@ defmodule Chat.TreatmentsTest do
   alias Chat.Repo
   alias Chat.Treatments
   alias Chat.Treatments.Treatment
+  alias Ecto.Adapters.SQL.Sandbox
 
   setup do
     {:ok, user} = Identity.sync_user(%{"sub" => "treatment-owner"}, %{})
@@ -32,6 +33,101 @@ defmodule Chat.TreatmentsTest do
 
     assert treatment.assigned_agent_id == nil
     assert treatment.assigned_at == nil
+  end
+
+  test "logistics agent can assign an available treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_480, user.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert assigned.assigned_agent_id == agent.id
+    assert assigned.assigned_at != nil
+  end
+
+  test "commercial user cannot assign a treatment", %{user: user} do
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_481, user.id)
+
+    assert {:error, :forbidden} = Treatments.assign_agent(treatment, user)
+    assert %{assigned_agent_id: nil, assigned_at: nil} = Repo.get!(Treatment, treatment.id)
+  end
+
+  test "another agent cannot take an assigned treatment", %{user: user} do
+    first_agent = logistics_agent_fixture()
+    second_agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_482, user.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, first_agent)
+    assert {:error, :already_assigned} = Treatments.assign_agent(treatment, second_agent)
+
+    first_agent_id = first_agent.id
+
+    assert %{assigned_agent_id: ^first_agent_id, assigned_at: assigned_at} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert assigned_at == assigned.assigned_at
+  end
+
+  test "assigning the same treatment twice by the same agent is idempotent", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_483, user.id)
+
+    assert {:ok, first} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, second} = Treatments.assign_agent(first, agent)
+
+    assert second.assigned_agent_id == agent.id
+    assert second.assigned_at == first.assigned_at
+  end
+
+  test "assignment uses the current persisted treatment state", %{user: user} do
+    first_agent = logistics_agent_fixture()
+    second_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: stale_treatment}} =
+             Treatments.open_for_order(9_998_043_484, user.id)
+
+    assert {:ok, _assigned} = Treatments.assign_agent(stale_treatment, first_agent)
+    assert {:error, :already_assigned} = Treatments.assign_agent(stale_treatment, second_agent)
+  end
+
+  test "concurrent assignment allows only one agent", %{user: user} do
+    first_agent = logistics_agent_fixture()
+    second_agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_485, user.id)
+
+    tasks =
+      for agent <- [first_agent, second_agent] do
+        task =
+          Task.async(fn ->
+            receive do
+              :assign -> Treatments.assign_agent(treatment, agent)
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        send(task.pid, :assign)
+        task
+      end
+
+    statuses =
+      tasks
+      |> Enum.map(&Task.await(&1, 5_000))
+      |> Enum.map(fn
+        {:ok, _treatment} -> :ok
+        {:error, :already_assigned} -> :already_assigned
+      end)
+      |> Enum.sort()
+
+    assert [:already_assigned, :ok] = statuses
+    assert %{assigned_agent_id: assigned_agent_id} = Repo.get!(Treatment, treatment.id)
+    assert assigned_agent_id in [first_agent.id, second_agent.id]
+  end
+
+  test "assigning a treatment that no longer exists returns not found" do
+    agent = logistics_agent_fixture()
+    missing_treatment = %Treatment{id: Ecto.UUID.generate()}
+
+    assert {:error, :not_found} = Treatments.assign_agent(missing_treatment, agent)
   end
 
   test "assignment changeset accepts an agent and timestamp", %{user: user} do
