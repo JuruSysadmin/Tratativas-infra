@@ -144,7 +144,56 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert assigned_agent_id == target_agent.id
     assert assigned_at != assigned.assigned_at
     assert transfer_audit_count(treatment, current_agent) == 1
-    refute_push "treatment:transferred", _payload
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      status: "in_progress",
+      assigned_agent_id: ^assigned_agent_id,
+      assigned_at: ^assigned_at
+    }
+  end
+
+  test "transferred treatment reaches every room subscriber from one transition" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-broadcast-owner"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_016, owner.id)
+
+    for agent <- [current_agent, target_agent] do
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    end
+
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, current_socket} =
+      UserSocket
+      |> socket("channel-transfer-broadcast-current", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    {:ok, _reply, _target_socket} =
+      UserSocket
+      |> socket("channel-transfer-broadcast-target", %{current_user: target_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(current_socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :ok, %{treatment_id: treatment_id, assigned_agent_id: target_agent_id}
+    assert target_agent_id == target_agent.id
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      assigned_agent_id: ^target_agent_id
+    }
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      assigned_agent_id: ^target_agent_id
+    }
+
+    refute_push "treatment:transferred", _duplicate
+    assert transfer_audit_count(treatment, current_agent) == 1
   end
 
   test "commercial member receives forbidden when transferring through the channel" do
@@ -295,9 +344,23 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
         "status" => "open"
       })
 
-    assert_reply ref, :ok, %{assigned_agent_id: assigned_agent_id, status: "in_progress"}
+    assert_reply ref, :ok, %{
+      treatment_id: treatment_id,
+      assigned_agent_id: assigned_agent_id,
+      assigned_at: assigned_at,
+      status: "in_progress"
+    }
+
     assert assigned_agent_id == target_agent.id
-    assert Repo.get!(Treatment, treatment.id).assigned_at != assigned.assigned_at
+    assert assigned_at != assigned.assigned_at
+    assert Repo.get!(Treatment, treatment.id).assigned_at == assigned_at
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      assigned_agent_id: ^assigned_agent_id,
+      assigned_at: ^assigned_at,
+      status: "in_progress"
+    }
 
     ref = push(socket, "treatment:transfer", %{})
     assert_reply ref, :error, %{reason: "invalid_target_agent"}

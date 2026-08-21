@@ -232,7 +232,9 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, transferred_treatment, :transferred} ->
-        {:reply, {:ok, treatment_transfer_payload(transferred_treatment)}, socket}
+        payload = treatment_transfer_payload(transferred_treatment)
+        broadcast!(socket, "treatment:transferred", payload)
+        {:reply, {:ok, payload}, socket}
 
       {:error, reason}
       when reason in [
