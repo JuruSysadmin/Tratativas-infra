@@ -72,6 +72,13 @@ defmodule Chat.Treatments do
     end
   end
 
+  def reopen_for_room(room_id, %User{} = user) do
+    Rooms.with_member_room(user.id, room_id, fn _room ->
+      reopen_room_treatment(room_id, user)
+    end)
+    |> normalize_reopen_member_room_result()
+  end
+
   def list_audit_events(treatment_id, user_id) do
     with {:ok, treatment_id} <- Ecto.UUID.cast(treatment_id),
          {:ok, user_id} <- Ecto.UUID.cast(user_id) do
@@ -236,6 +243,13 @@ defmodule Chat.Treatments do
     end
   end
 
+  defp reopen_room_treatment(room_id, user) do
+    case get_by_room_id(room_id) do
+      nil -> {:error, :not_found}
+      %Treatment{} = treatment -> reopen(treatment, user)
+    end
+  end
+
   defp resolve_result(treatment_id, user) do
     with :ok <- Authorization.authorize(user, "treatment.resolve") do
       Repo.transaction(fn -> resolve_locked(treatment_id, user) end)
@@ -377,4 +391,11 @@ defmodule Chat.Treatments do
 
   defp normalize_member_room_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_member_room_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_reopen_member_room_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_reopen_member_room_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_reopen_member_room_result({:error, :forbidden}), do: {:error, :not_found}
+  defp normalize_reopen_member_room_result({:error, reason}), do: {:error, reason}
 end

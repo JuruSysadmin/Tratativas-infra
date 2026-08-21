@@ -185,6 +185,24 @@ defmodule Chat.TreatmentsTest do
     assert audit_event_count(treatment, owner, "treatment_reopened") == 0
   end
 
+  test "reopen_for_room rejects an authorized user outside the room", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, outsider} =
+             Identity.sync_user(%{"sub" => "treatment-reopen-for-room-outsider"}, %{})
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_511, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:error, :not_found} = Treatments.reopen_for_room(room.id, outsider)
+
+    assert Repo.get!(Treatment, treatment.id).status == resolved.status
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+  end
+
   test "only resolved treatments can be reopened", %{user: owner} do
     agent = logistics_agent_fixture()
 
