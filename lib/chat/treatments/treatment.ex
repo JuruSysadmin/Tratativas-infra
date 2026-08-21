@@ -40,6 +40,10 @@ defmodule Chat.Treatments.Treatment do
     |> foreign_key_constraint(:assigned_agent_id)
   end
 
+  def unassignment_changeset(treatment) do
+    change(treatment, %{status: "open", assigned_agent_id: nil, assigned_at: nil})
+  end
+
   def resolution_changeset(treatment, resolved_by_id, resolved_at) do
     treatment
     |> change(%{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at})
