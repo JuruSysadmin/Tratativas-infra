@@ -4,6 +4,7 @@ defmodule Chat.TreatmentsTest do
   alias Chat.Accounts.User
   alias Chat.Auth.Identity
   alias Chat.Repo
+  alias Chat.Rooms
   alias Chat.Treatments
   alias Chat.Treatments.Treatment
   alias Ecto.Adapters.SQL.Sandbox
@@ -96,6 +97,22 @@ defmodule Chat.TreatmentsTest do
              %{event_type: "treatment_created", actor_id: _owner_id}
            ] =
              Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "room resolution reports an effective transition explicitly", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_497, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:ok, resolved, :resolved} = Treatments.resolve_for_room(room.id, agent)
+    assert resolved.id == assigned.id
+    assert resolved.status == "resolved"
+
+    assert {:error, :invalid_status} = Treatments.resolve_for_room(room.id, agent)
   end
 
   test "unauthorized user cannot resolve a treatment", %{user: user} do
