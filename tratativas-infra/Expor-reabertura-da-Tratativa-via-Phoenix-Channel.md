@@ -4,10 +4,10 @@ type: feature
 estimate: 2
 tags: [backend, elixir, phoenix, channels, treatments, tdd]
 status: delivered
-modified: "2026-08-21T16:04:01Z"
+modified: "2026-08-21T16:15:15Z"
 started: "2026-08-21T15:58:56Z"
-finished: "2026-08-21T16:04:01Z"
-delivered: "2026-08-21T16:04:01Z"
+finished: "2026-08-21T16:15:15Z"
+delivered: "2026-08-21T16:15:15Z"
 ---
 
 ## Problem statement
@@ -388,6 +388,9 @@ que será implementado na próxima story.
 - [x] Marcar como delivered.
 - [x] Aguardar revisão humana antes de accepted.
 
+- [x] Revalidar membership em `reopen_for_room/2` com `Rooms.with_member_room/3`.
+- [x] Adicionar regressão da API por Room para usuário sem membership.
+- [x] Executar gates focados e completos após o feedback de revisão.
 ## Fora do escopo
 
 Não implementar:
@@ -405,5 +408,10 @@ Não implementar:
     Publicar reabertura da Tratativa em realtime
 
 ## Comments
+@JuruSysadmin 2026-08-21
+Feedback de revisão: `reopen_for_room/2` deve validar membership no próprio contexto, seguindo o padrão das APIs `*_for_room`. A correção deve manter o Channel como adaptador e preservar o contrato `not_found` para usuário fora da Room.
+
+@JuruSysadmin 2026-08-21
+Feedback atendido: `reopen_for_room/2` agora executa `Rooms.with_member_room/3` no próprio contexto antes de localizar a Treatment. O caso de Room existente sem membership é normalizado para `not_found`, preservando o contrato não-discriminatório. Adicionada regressão direta da API por Room. Verificação: 74 testes focados, 505 testes em `mix test`, `mix format --check-formatted`, `mix precommit` e `git diff --check` passaram.
 
 ## Attachments
