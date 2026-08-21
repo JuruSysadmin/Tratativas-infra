@@ -341,6 +341,37 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
              Repo.get!(Treatment, treatment.id)
   end
 
+  test "stale caller state does not broadcast an idempotent assignment retry" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-treatment-stale-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: stale_treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_012, owner.id)
+
+    assert stale_treatment.assigned_agent_id == nil
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(stale_treatment, agent)
+    assert assigned.assigned_agent_id == agent.id
+    assert stale_treatment.assigned_agent_id == nil
+
+    assert {:ok, idempotent_treatment, :idempotent} =
+             Treatments.assign_agent_for_room(room.id, agent)
+
+    assert idempotent_treatment.assigned_agent_id == agent.id
+    assert idempotent_treatment.assigned_at == assigned.assigned_at
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-treatment-stale-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:assign_to_me", %{})
+
+    assert_reply ref, :ok, %{assigned_at: assigned_at}
+    refute_push "treatment:agent_assigned", _duplicate
+    assert assigned_at == assigned.assigned_at
+  end
+
   test "client identity and timestamp fields do not control assignment" do
     {:ok, owner} = Identity.sync_user(%{"sub" => "channel-treatment-owner-four"}, %{})
     agent = logistics_agent_fixture()
