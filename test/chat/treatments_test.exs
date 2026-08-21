@@ -65,6 +65,220 @@ defmodule Chat.TreatmentsTest do
              Treatments.list_audit_events(treatment.id, user.id)
   end
 
+  test "assigned agent can unassign an in-progress treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_512, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:ok, unassigned, :unassigned} = Treatments.unassign(assigned, agent)
+    assert unassigned.status == "open"
+    assert unassigned.assigned_agent_id == nil
+    assert unassigned.assigned_at == nil
+
+    assert %{status: "open", assigned_agent_id: nil, assigned_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 1
+  end
+
+  test "commercial user cannot unassign a treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_513, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:error, :forbidden} = Treatments.unassign(assigned, user)
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 0
+  end
+
+  test "another logistics agent cannot unassign a treatment", %{user: user} do
+    assigned_agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_514, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(assigned_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(other_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, assigned_agent)
+
+    assert {:error, :not_assigned_agent} = Treatments.unassign(assigned, other_agent)
+
+    assert %{
+             status: "in_progress",
+             assigned_agent_id: assigned_agent_id,
+             assigned_at: assigned_at
+           } =
+             Repo.get!(Treatment, treatment.id)
+
+    assert assigned_agent_id == assigned_agent.id
+    assert assigned_at == assigned.assigned_at
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 0
+  end
+
+  test "authorized agent outside the room receives not_found", %{user: user} do
+    assigned_agent = logistics_agent_fixture()
+    outsider = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_515, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(assigned_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, assigned_agent)
+
+    assert {:error, :not_found} = Treatments.unassign(assigned, outsider)
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+    assert Repo.get!(Treatment, treatment.id).assigned_agent_id == assigned_agent.id
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 0
+  end
+
+  test "only in-progress treatments can be unassigned", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    for {status, order_id} <- [
+          {"open", 9_998_043_516},
+          {"resolved", 9_998_043_517},
+          {"closed", 9_998_043_518}
+        ] do
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(order_id, user.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+      treatment =
+        case status do
+          "open" ->
+            treatment
+
+          "resolved" ->
+            {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+            {:ok, resolved} = Treatments.resolve(assigned, agent)
+            resolved
+
+          "closed" ->
+            {:ok, closed} = Treatments.close(treatment, user.id)
+            closed
+        end
+
+      assert {:error, :invalid_status} = Treatments.unassign(treatment, agent)
+      assert Repo.get!(Treatment, treatment.id).status == status
+      assert audit_event_count(treatment, user, "treatment_unassigned") == 0
+    end
+  end
+
+  test "unassign rolls back when the audit event cannot be persisted", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_519, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{} = changeset} = Treatments.unassign(assigned, agent)
+    assert "forced audit failure" in errors_on(changeset).event_type
+
+    assert %{
+             status: "in_progress",
+             assigned_agent_id: assigned_agent_id,
+             assigned_at: assigned_at
+           } =
+             Repo.get!(Treatment, treatment.id)
+
+    assert assigned_agent_id == assigned.assigned_agent_id
+    assert assigned_at == assigned.assigned_at
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 0
+  end
+
+  test "unassign evaluates persisted state instead of stale caller state", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_520, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:ok, _persisted_open} =
+             assigned
+             |> Treatment.unassignment_changeset()
+             |> Repo.update()
+
+    assert assigned.status == "in_progress"
+    assert Repo.get!(Treatment, treatment.id).status == "open"
+    assert {:error, :invalid_status} = Treatments.unassign(assigned, agent)
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 0
+  end
+
+  test "concurrent unassign allows only one effective transition", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_521, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    tasks =
+      for _ <- 1..2 do
+        task =
+          Task.async(fn ->
+            receive do
+              :unassign -> Treatments.unassign(assigned, agent)
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        task
+      end
+
+    Enum.each(tasks, &send(&1.pid, :unassign))
+
+    outcomes =
+      tasks
+      |> Enum.map(&Task.await(&1, 5_000))
+      |> Enum.map(fn
+        {:ok, _treatment, :unassigned} -> :unassigned
+        {:error, :invalid_status} -> :invalid_status
+      end)
+      |> Enum.sort()
+
+    assert [:invalid_status, :unassigned] = outcomes
+
+    assert %{status: "open", assigned_agent_id: nil, assigned_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_unassigned") == 1
+  end
+
+  test "unassign returns not_found for a missing treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{room: room}} = Treatments.open_for_order(9_998_043_522, user.id)
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    missing_treatment = %Treatment{id: Ecto.UUID.generate(), room_id: room.id}
+
+    assert {:error, :not_found} = Treatments.unassign(missing_treatment, agent)
+  end
+
   test "assigned agent can resolve an in-progress treatment", %{user: user} do
     agent = logistics_agent_fixture()
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_489, user.id)
