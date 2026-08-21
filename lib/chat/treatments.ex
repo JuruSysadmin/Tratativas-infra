@@ -3,9 +3,10 @@ defmodule Chat.Treatments do
 
   import Ecto.Query
 
+  alias Chat.Accounts.User
   alias Chat.Repo
   alias Chat.Rooms
-  alias Chat.Treatments.{AuditEvent, Treatment}
+  alias Chat.Treatments.{AuditEvent, Authorization, Treatment}
 
   @doc "Abre ou reabre a tratativa única associada ao pedido."
   def open_for_order(order_id, user_id) when is_integer(order_id) do
@@ -34,6 +35,34 @@ defmodule Chat.Treatments do
       end)
     end)
     |> normalize_transaction_result()
+  end
+
+  def assign_agent(%Treatment{id: treatment_id}, %User{} = user) do
+    case assign_agent_result(treatment_id, user) do
+      {:ok, treatment, _result} -> {:ok, treatment}
+      error -> error
+    end
+  end
+
+  def get_by_room_id(room_id) do
+    Repo.get_by(Treatment, room_id: room_id)
+  end
+
+  def assign_agent_for_room(room_id, %User{} = user) do
+    Rooms.with_member_room(user.id, room_id, fn _room -> assign_room_treatment(room_id, user) end)
+    |> normalize_member_room_result()
+  end
+
+  def resolve(%Treatment{id: treatment_id}, %User{} = user) do
+    with :ok <- Authorization.authorize(user, "treatment.resolve") do
+      Repo.transaction(fn -> resolve_locked(treatment_id, user) end)
+      |> normalize_transaction_result()
+    end
+  end
+
+  def resolve_for_room(room_id, %User{} = user) do
+    Rooms.with_member_room(user.id, room_id, fn _room -> resolve_room_treatment(room_id, user) end)
+    |> normalize_member_room_result()
   end
 
   def list_audit_events(treatment_id, user_id) do
@@ -114,6 +143,141 @@ defmodule Chat.Treatments do
     |> Repo.insert()
   end
 
+  defp assign_locked(treatment_id, user) do
+    treatment =
+      from(treatment in Treatment,
+        where: treatment.id == ^treatment_id,
+        lock: "FOR UPDATE"
+      )
+      |> Repo.one()
+
+    assign_locked_state(treatment, user)
+  end
+
+  defp assign_locked_state(nil, _user), do: {:error, :not_found}
+
+  defp assign_locked_state(%Treatment{assigned_agent_id: nil, status: "open"} = treatment, user) do
+    case persist_assignment(treatment, user) do
+      {:ok, assigned_treatment} -> {:ok, assigned_treatment, :assigned}
+      error -> error
+    end
+  end
+
+  defp assign_locked_state(%Treatment{assigned_agent_id: nil}, _user),
+    do: {:error, :invalid_status}
+
+  defp assign_locked_state(
+         %Treatment{status: "in_progress", assigned_agent_id: assigned_agent_id} = treatment,
+         %User{id: assigned_agent_id}
+       ),
+       do: {:ok, treatment, :idempotent}
+
+  defp assign_locked_state(%Treatment{status: status}, _user)
+       when status in ["resolved", "closed"],
+       do: {:error, :invalid_status}
+
+  defp assign_locked_state(%Treatment{assigned_agent_id: assigned_agent_id}, %User{
+         id: assigned_agent_id
+       }),
+       do: {:error, :invalid_status}
+
+  defp assign_locked_state(%Treatment{}, _user), do: {:error, :already_assigned}
+
+  defp persist_assignment(treatment, user) do
+    treatment
+    |> Treatment.assignment_changeset(%{
+      assigned_agent_id: user.id,
+      assigned_at: DateTime.utc_now(),
+      status: "in_progress"
+    })
+    |> Repo.update()
+  end
+
+  defp assign_agent_result(treatment_id, user) do
+    with :ok <- Authorization.authorize(user, "treatment.assign") do
+      Repo.transaction(fn -> assign_locked_and_audit(treatment_id, user) end)
+      |> normalize_assignment_transaction_result()
+    end
+  end
+
+  defp assign_room_treatment(room_id, user) do
+    case get_by_room_id(room_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{id: treatment_id} ->
+        with :ok <- Authorization.authorize(user, "treatment.assign") do
+          assign_locked_and_audit(treatment_id, user)
+        end
+    end
+  end
+
+  defp resolve_room_treatment(room_id, user) do
+    case get_by_room_id(room_id) do
+      nil -> {:error, :not_found}
+      %Treatment{} = treatment -> resolve(treatment, user)
+    end
+  end
+
+  defp assign_locked_and_audit(treatment_id, user) do
+    case assign_locked(treatment_id, user) do
+      {:ok, treatment, :assigned} ->
+        case record_event(treatment, user.id, "treatment_assigned") do
+          {:ok, _event} -> {:ok, treatment, :assigned}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      {:ok, treatment, :idempotent} ->
+        {:ok, treatment, :idempotent}
+
+      error ->
+        error
+    end
+  end
+
+  defp resolve_locked(treatment_id, user) do
+    treatment =
+      from(treatment in Treatment,
+        where: treatment.id == ^treatment_id,
+        lock: "FOR UPDATE"
+      )
+      |> Repo.one()
+
+    case treatment do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{status: "in_progress", assigned_agent_id: assigned_agent_id}
+      when assigned_agent_id == user.id ->
+        resolve_locked_and_audit(treatment, user)
+
+      %Treatment{status: "in_progress"} ->
+        {:error, :not_assigned_agent}
+
+      %Treatment{} ->
+        {:error, :invalid_status}
+    end
+  end
+
+  defp resolve_locked_treatment(treatment, user) do
+    treatment
+    |> Treatment.resolution_changeset(user.id, DateTime.utc_now())
+    |> Repo.update()
+  end
+
+  defp resolve_locked_and_audit(treatment, user) do
+    case resolve_locked_treatment(treatment, user) do
+      {:ok, resolved_treatment} ->
+        case record_event(resolved_treatment, user.id, "treatment_resolved") do
+          {:ok, _event} -> {:ok, resolved_treatment}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      error ->
+        error
+    end
+  end
+
   defp authorized_treatment(treatment_id, user_id) do
     from(treatment in Treatment,
       join: membership in "room_members",
@@ -124,7 +288,22 @@ defmodule Chat.Treatments do
     |> Repo.one()
   end
 
+  defp normalize_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_transaction_result({:ok, {:ok, result}}), do: {:ok, result}
   defp normalize_transaction_result({:ok, result}), do: {:ok, result}
   defp normalize_transaction_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_assignment_transaction_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_assignment_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_assignment_transaction_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_member_room_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_member_room_result({:ok, {:ok, result}}), do: {:ok, result}
+
+  defp normalize_member_room_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_member_room_result({:error, reason}), do: {:error, reason}
 end

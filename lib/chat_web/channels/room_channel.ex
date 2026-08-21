@@ -7,6 +7,7 @@ defmodule ChatWeb.RoomChannel do
   alias Chat.Messages
   alias Chat.Messages.Attachments
   alias Chat.Rooms
+  alias Chat.Treatments
   alias ChatWeb.Presence
 
   @impl true
@@ -153,6 +154,51 @@ defmodule ChatWeb.RoomChannel do
     {:reply, {:error, %{reason: "invalid_message"}}, socket}
   end
 
+  def handle_in("treatment:assign_to_me", _params, socket) do
+    result =
+      Treatments.assign_agent_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
+
+    case result do
+      {:ok, assigned_treatment, :assigned} ->
+        payload = treatment_assignment_payload(assigned_treatment)
+        broadcast!(socket, "treatment:agent_assigned", payload)
+        {:reply, {:ok, payload}, socket}
+
+      {:ok, assigned_treatment, :idempotent} ->
+        {:reply, {:ok, treatment_assignment_payload(assigned_treatment)}, socket}
+
+      {:error, reason}
+      when reason in [:forbidden, :already_assigned, :not_found, :invalid_status] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_assignment_failed"}}, socket}
+    end
+  end
+
+  def handle_in("treatment:resolve", _params, socket) do
+    result =
+      Treatments.resolve_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
+
+    case result do
+      {:ok, resolved_treatment} ->
+        {:reply, {:ok, treatment_resolution_payload(resolved_treatment)}, socket}
+
+      {:error, reason}
+      when reason in [:forbidden, :not_assigned_agent, :invalid_status, :not_found] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_resolution_failed"}}, socket}
+    end
+  end
+
   def handle_in("typing:start", _params, socket) do
     Presence.update_typing(socket, socket.assigns.current_user, true)
     {:noreply, socket}
@@ -192,6 +238,23 @@ defmodule ChatWeb.RoomChannel do
       inserted_at: message.inserted_at,
       edited_at: message.edited_at,
       attachments: Attachments.message_payload_attachments(message)
+    }
+  end
+
+  defp treatment_assignment_payload(treatment) do
+    %{
+      treatment_id: treatment.id,
+      assigned_agent_id: treatment.assigned_agent_id,
+      assigned_at: treatment.assigned_at
+    }
+  end
+
+  defp treatment_resolution_payload(treatment) do
+    %{
+      treatment_id: treatment.id,
+      status: treatment.status,
+      resolved_by_id: treatment.resolved_by_id,
+      resolved_at: treatment.resolved_at
     }
   end
 end
