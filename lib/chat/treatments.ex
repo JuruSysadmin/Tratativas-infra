@@ -65,6 +65,13 @@ defmodule Chat.Treatments do
     |> normalize_member_room_result()
   end
 
+  def reopen(%Treatment{id: treatment_id}, %User{} = user) do
+    with :ok <- Authorization.authorize(user, "treatment.reopen") do
+      Repo.transaction(fn -> reopen_locked(treatment_id, user) end)
+      |> normalize_reopen_transaction_result()
+    end
+  end
+
   def list_audit_events(treatment_id, user_id) do
     with {:ok, treatment_id} <- Ecto.UUID.cast(treatment_id),
          {:ok, user_id} <- Ecto.UUID.cast(user_id) do
@@ -295,14 +302,49 @@ defmodule Chat.Treatments do
     end
   end
 
+  defp reopen_locked(treatment_id, user) do
+    treatment = locked_authorized_treatment(treatment_id, user.id)
+
+    case treatment do
+      nil -> {:error, :not_found}
+      %Treatment{status: "resolved"} -> reopen_locked_and_audit(treatment, user)
+      %Treatment{} -> {:error, :invalid_status}
+    end
+  end
+
+  defp reopen_locked_and_audit(treatment, user) do
+    case treatment |> Treatment.reopen_changeset() |> Repo.update() do
+      {:ok, reopened_treatment} ->
+        case record_event(reopened_treatment, user.id, "treatment_reopened") do
+          {:ok, _event} -> {:ok, reopened_treatment, :reopened}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      error ->
+        error
+    end
+  end
+
   defp authorized_treatment(treatment_id, user_id) do
+    treatment_id
+    |> authorized_treatment_query(user_id)
+    |> Repo.one()
+  end
+
+  defp locked_authorized_treatment(treatment_id, user_id) do
+    treatment_id
+    |> authorized_treatment_query(user_id)
+    |> lock("FOR UPDATE")
+    |> Repo.one()
+  end
+
+  defp authorized_treatment_query(treatment_id, user_id) do
     from(treatment in Treatment,
       join: membership in "room_members",
       on: membership.room_id == treatment.room_id,
       where: treatment.id == type(^treatment_id, :binary_id),
       where: membership.user_id == type(^user_id, :binary_id)
     )
-    |> Repo.one()
   end
 
   defp normalize_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
@@ -321,6 +363,12 @@ defmodule Chat.Treatments do
 
   defp normalize_resolution_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_resolution_transaction_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_reopen_transaction_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_reopen_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_reopen_transaction_result({:error, reason}), do: {:error, reason}
 
   defp normalize_member_room_result({:ok, {:ok, treatment, result}}),
     do: {:ok, treatment, result}
