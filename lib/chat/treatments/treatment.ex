@@ -11,9 +11,11 @@ defmodule Chat.Treatments.Treatment do
     field :protocol_number, :integer, read_after_writes: true
     field :order_id, :integer
     field :status, :string, default: "open"
+    field :assigned_at, :utc_datetime_usec
 
     belongs_to :room, Chat.Rooms.Room
     belongs_to :opened_by, Chat.Accounts.User
+    belongs_to :assigned_agent, Chat.Accounts.User
     has_many :audit_events, Chat.Treatments.AuditEvent
 
     timestamps(type: :utc_datetime_usec)
@@ -26,5 +28,12 @@ defmodule Chat.Treatments.Treatment do
     |> validate_inclusion(:status, ["open", "closed"])
     |> unique_constraint(:order_id)
     |> unique_constraint(:room_id)
+  end
+
+  def assignment_changeset(treatment, attrs) do
+    treatment
+    |> cast(attrs, [:assigned_agent_id, :assigned_at])
+    |> validate_required([:assigned_agent_id, :assigned_at])
+    |> foreign_key_constraint(:assigned_agent_id)
   end
 end
