@@ -210,7 +210,7 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, reopened_treatment, :reopened} ->
-        payload = treatment_reopen_payload(reopened_treatment)
+        payload = treatment_assignment_state_payload(reopened_treatment)
         broadcast!(socket, "treatment:reopened", payload)
         {:reply, {:ok, payload}, socket}
 
@@ -232,7 +232,7 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, transferred_treatment, :transferred} ->
-        payload = treatment_transfer_payload(transferred_treatment)
+        payload = treatment_assignment_state_payload(transferred_treatment)
         broadcast!(socket, "treatment:transferred", payload)
         {:reply, {:ok, payload}, socket}
 
@@ -315,16 +315,7 @@ defmodule ChatWeb.RoomChannel do
     }
   end
 
-  defp treatment_reopen_payload(treatment) do
-    %{
-      treatment_id: treatment.id,
-      status: treatment.status,
-      assigned_agent_id: treatment.assigned_agent_id,
-      assigned_at: treatment.assigned_at
-    }
-  end
-
-  defp treatment_transfer_payload(treatment) do
+  defp treatment_assignment_state_payload(treatment) do
     %{
       treatment_id: treatment.id,
       status: treatment.status,
