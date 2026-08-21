@@ -201,6 +201,25 @@ defmodule ChatWeb.RoomChannel do
     end
   end
 
+  def handle_in("treatment:reopen", _params, socket) do
+    result =
+      Treatments.reopen_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
+
+    case result do
+      {:ok, reopened_treatment, :reopened} ->
+        {:reply, {:ok, treatment_reopen_payload(reopened_treatment)}, socket}
+
+      {:error, reason} when reason in [:forbidden, :not_found, :invalid_status] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_reopen_failed"}}, socket}
+    end
+  end
+
   def handle_in("typing:start", _params, socket) do
     Presence.update_typing(socket, socket.assigns.current_user, true)
     {:noreply, socket}
@@ -257,6 +276,14 @@ defmodule ChatWeb.RoomChannel do
       status: treatment.status,
       resolved_by_id: treatment.resolved_by_id,
       resolved_at: treatment.resolved_at
+    }
+  end
+
+  defp treatment_reopen_payload(treatment) do
+    %{
+      treatment_id: treatment.id,
+      status: treatment.status,
+      assigned_agent_id: treatment.assigned_agent_id
     }
   end
 end

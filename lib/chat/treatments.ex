@@ -72,6 +72,13 @@ defmodule Chat.Treatments do
     end
   end
 
+  def reopen_for_room(room_id, %User{} = user) do
+    case get_by_room_id(room_id) do
+      nil -> {:error, :not_found}
+      %Treatment{} = treatment -> reopen(treatment, user)
+    end
+  end
+
   def list_audit_events(treatment_id, user_id) do
     with {:ok, treatment_id} <- Ecto.UUID.cast(treatment_id),
          {:ok, user_id} <- Ecto.UUID.cast(user_id) do

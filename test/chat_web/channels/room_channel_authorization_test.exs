@@ -114,6 +114,188 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert resolution_audit_count(treatment, agent) == 1
   end
 
+  test "commercial member can reopen the room treatment through the channel" do
+    {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-reopen-commercial"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_015, commercial.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-commercial", %{current_user: commercial})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:reopen", %{})
+
+    assert_reply ref, :ok, %{
+      treatment_id: treatment_id,
+      status: "in_progress",
+      assigned_agent_id: assigned_agent_id
+    }
+
+    assert treatment_id == treatment.id
+    assert assigned_agent_id == agent.id
+
+    assert %{
+             status: "in_progress",
+             assigned_agent_id: ^assigned_agent_id,
+             assigned_at: assigned_at,
+             resolved_by_id: nil,
+             resolved_at: nil
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert assigned_at == resolved.assigned_at
+    refute_push "treatment:reopened", _payload
+
+    assert reopened_audit_count(treatment, commercial) == 1
+  end
+
+  test "logistics agent member can reopen the room treatment through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-logistics-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_016, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, _resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-logistics", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:reopen", %{})
+
+    treatment_id = treatment.id
+    assert_reply ref, :ok, %{treatment_id: ^treatment_id, status: "in_progress"}
+    assert reopened_audit_count(treatment, owner) == 1
+  end
+
+  test "authorized user outside the treatment room receives not_found" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-membership-owner"}, %{})
+    {:ok, outsider} = Identity.sync_user(%{"sub" => "channel-reopen-outsider"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_017, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+    socket = %Phoenix.Socket{assigns: %{current_user: outsider, room_id: room.id}}
+
+    assert {:reply, {:error, %{reason: "not_found"}}, ^socket} =
+             RoomChannel.handle_in("treatment:reopen", %{}, socket)
+
+    assert Repo.get!(Treatment, treatment.id).status == "resolved"
+    assert reopened_audit_count(treatment, owner) == 0
+    assert Repo.get!(Treatment, treatment.id).assigned_at == resolved.assigned_at
+  end
+
+  test "role without reopen permission receives forbidden" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-forbidden-owner"}, %{})
+    agent = logistics_agent_fixture()
+    unauthorized = %{owner | role: "unknown"}
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_018, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-forbidden", %{current_user: unauthorized})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:reopen", %{})
+
+    assert_reply ref, :error, %{reason: "forbidden"}
+    refute_push "treatment:reopened", _payload
+    assert Repo.get!(Treatment, treatment.id).status == resolved.status
+    assert reopened_audit_count(treatment, owner) == 0
+  end
+
+  test "in-progress treatment returns invalid_status through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-invalid-status"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_019, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-invalid-status", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:reopen", %{})
+
+    assert_reply ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:reopened", _payload
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+  end
+
+  test "room without treatment returns not_found when reopening through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-generic-room"}, %{})
+    {:ok, room} = Rooms.create_room(%{"name" => "Sala genérica para reabertura"}, owner.id)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-generic-room", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    channel_pid = socket.channel_pid
+    channel_ref = Process.monitor(channel_pid)
+    ref = push(socket, "treatment:reopen", %{})
+
+    assert_reply ref, :error, %{reason: "not_found"}
+    refute_push "treatment:reopened", _payload
+    refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
+  end
+
+  test "client treatment fields do not control reopening" do
+    {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-reopen-payload"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_020, commercial.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-payload", %{current_user: commercial})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref =
+      push(socket, "treatment:reopen", %{
+        "status" => "resolved",
+        "resolved_by_id" => agent.id,
+        "resolved_at" => "2000-01-01T00:00:00Z",
+        "assigned_agent_id" => Ecto.UUID.generate()
+      })
+
+    assert_reply ref, :ok, %{status: "in_progress", assigned_agent_id: assigned_agent_id}
+    assert assigned_agent_id == agent.id
+
+    assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert Repo.get!(Treatment, treatment.id).assigned_at == resolved.assigned_at
+    assert reopened_audit_count(treatment, commercial) == 1
+  end
+
   test "concurrent channel resolutions publish exactly one event" do
     {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-race-owner"}, %{})
     agent = logistics_agent_fixture()
@@ -771,5 +953,11 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     treatment.id
     |> Treatments.list_audit_events(user.id)
     |> Enum.count(&(&1.event_type == "treatment_resolved"))
+  end
+
+  defp reopened_audit_count(treatment, user) do
+    treatment.id
+    |> Treatments.list_audit_events(user.id)
+    |> Enum.count(&(&1.event_type == "treatment_reopened"))
   end
 end
