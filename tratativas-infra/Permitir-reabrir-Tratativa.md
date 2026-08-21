@@ -2,14 +2,14 @@
 title: Permitir reabrir Tratativa
 type: feature
 created: "2026-08-21T14:35:51Z"
-modified: "2026-08-21T14:42:37Z"
+modified: "2026-08-21T15:12:00Z"
 author: JuruSysadmin
 status: delivered
 estimate: "3"
 tags: [backend, elixir, treatments, authorization, tdd]
 started: "2026-08-21T14:36:30Z"
-finished: "2026-08-21T14:42:37Z"
-delivered: "2026-08-21T14:42:37Z"
+finished: "2026-08-21T15:12:00Z"
+delivered: "2026-08-21T15:12:00Z"
 ---
 
 ## Problem statement
@@ -36,6 +36,7 @@ Update e `treatment_reopened` AuditEvent pertencem a mesma transaction. Falha da
 - [x] TDD iniciado antes da implementacao e RED observado para `reopen/2` inexistente.
 - [x] Commercial e logistics_agent podem reabrir.
 - [x] Autorizacao reutiliza `Authorization.authorize/2` sem duplicar roles.
+- [x] Usuario com role permitida, mas sem membership da Room, recebe `not_found` sem alteracao nem auditoria.
 - [x] Somente `resolved` pode ser reaberta.
 - [x] Estado persistido e recarregado sob `FOR UPDATE`; struct stale nao decide.
 - [x] Reabertura muda status para `in_progress`.
@@ -64,6 +65,9 @@ Update e `treatment_reopened` AuditEvent pertencem a mesma transaction. Falha da
 - [x] Rodar testes focados e todos os gates solicitados.
 - [x] Marcar story como delivered e aguardar revisao humana.
 
+- [x] Adicionar regressao para usuario autorizado fora da Room
+- [x] Restringir a query FOR UPDATE por room_members sem revelar existencia
+- [x] Reexecutar gates e atualizar PR 11
 ## Fora do escopo
 
 `treatment:reopen` no RoomChannel, broadcast `treatment:reopened`, unassign, transfer, frontend, Carbon AI Chat e Presence.
@@ -76,4 +80,11 @@ Expor reabertura da Tratativa via Phoenix Channel.
 @JuruSysadmin 2026-08-21
 TDD concluido. RED inicial observado por UndefinedFunctionError de reopen/2; segundo RED confirmou resolved_by_id ainda persistido antes da limpeza. GREEN: resolved -> in_progress sob FOR UPDATE, assignment preservado, resolucao limpa e treatment_reopened atomico. Cobertos commercial, logistics_agent, forbidden, estados invalidos, stale state, rollback de auditoria, concorrencia, retry e not_found. Verificacao: 44 testes focados, ad-hoc com 38, mix test e mix precommit com 496, format check e diff check dos arquivos da story passaram. O diff check global preserva somente a linha em branco preexistente em _icebox.md, fora do escopo.
 
+@JuruSysadmin 2026-08-21
+Request changes de membership atendido. RED confirmou que commercial autorizado fora da Room conseguia reabrir. A query contextual de authorized_treatment/2 foi extraida e reutilizada com FOR UPDATE; ausencia de Treatment ou membership retorna not_found sem update nem treatment_reopened. O teste de logistics_agent agora explicita membership. Verificacao: 45 focados, ad-hoc especifico, mix test e mix precommit com 497, format e diff check focado passaram. Normalizers permaneceram fora do escopo. O check global preserva somente a linha em branco preexistente em _icebox.md.
+
 ## Attachments
+
+## Rejection notes
+
+- 2026-08-21: PR review: reopen/2 valida role, mas nao restringe a Treatment por membership da Room

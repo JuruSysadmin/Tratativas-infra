@@ -122,9 +122,10 @@ defmodule Chat.TreatmentsTest do
   test "logistics agent can reopen a resolved treatment", %{user: owner} do
     agent = logistics_agent_fixture()
 
-    assert {:ok, %{treatment: treatment}} =
+    assert {:ok, %{treatment: treatment, room: room}} =
              Treatments.open_for_order(9_998_043_502, owner.id)
 
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
     assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
     assert {:ok, resolved} = Treatments.resolve(assigned, agent)
 
@@ -148,6 +149,37 @@ defmodule Chat.TreatmentsTest do
     assert %{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at} =
              Repo.get!(Treatment, treatment.id)
 
+    assert resolved_by_id == resolved.resolved_by_id
+    assert resolved_at == resolved.resolved_at
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+  end
+
+  test "authorized user cannot reopen a treatment outside their rooms", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, outsider} =
+             Identity.sync_user(%{"sub" => "treatment-reopen-outsider"}, %{})
+
+    assert outsider.role == "commercial"
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_510, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:error, :not_found} = Treatments.reopen(resolved, outsider)
+
+    assert %{
+             status: "resolved",
+             assigned_agent_id: assigned_agent_id,
+             assigned_at: assigned_at,
+             resolved_by_id: resolved_by_id,
+             resolved_at: resolved_at
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert assigned_agent_id == resolved.assigned_agent_id
+    assert assigned_at == resolved.assigned_at
     assert resolved_by_id == resolved.resolved_by_id
     assert resolved_at == resolved.resolved_at
     assert audit_event_count(treatment, owner, "treatment_reopened") == 0

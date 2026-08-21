@@ -303,11 +303,7 @@ defmodule Chat.Treatments do
   end
 
   defp reopen_locked(treatment_id, user) do
-    treatment =
-      Treatment
-      |> where([treatment], treatment.id == ^treatment_id)
-      |> lock("FOR UPDATE")
-      |> Repo.one()
+    treatment = locked_authorized_treatment(treatment_id, user.id)
 
     case treatment do
       nil -> {:error, :not_found}
@@ -330,13 +326,25 @@ defmodule Chat.Treatments do
   end
 
   defp authorized_treatment(treatment_id, user_id) do
+    treatment_id
+    |> authorized_treatment_query(user_id)
+    |> Repo.one()
+  end
+
+  defp locked_authorized_treatment(treatment_id, user_id) do
+    treatment_id
+    |> authorized_treatment_query(user_id)
+    |> lock("FOR UPDATE")
+    |> Repo.one()
+  end
+
+  defp authorized_treatment_query(treatment_id, user_id) do
     from(treatment in Treatment,
       join: membership in "room_members",
       on: membership.room_id == treatment.room_id,
       where: treatment.id == type(^treatment_id, :binary_id),
       where: membership.user_id == type(^user_id, :binary_id)
     )
-    |> Repo.one()
   end
 
   defp normalize_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
