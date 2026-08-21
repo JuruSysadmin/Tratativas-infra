@@ -60,6 +60,211 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert persisted_assigned_at == assigned_at
   end
 
+  test "assigned logistics agent can resolve the room treatment through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_006, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:resolve", %{})
+
+    assert_reply ref, :ok, %{
+      treatment_id: treatment_id,
+      status: "resolved",
+      resolved_by_id: resolved_by_id,
+      resolved_at: resolved_at
+    }
+
+    assert treatment_id == treatment.id
+    assert resolved_by_id == agent.id
+    assert resolved_at != nil
+
+    agent_id = agent.id
+
+    assert %{
+             status: "resolved",
+             resolved_by_id: ^agent_id,
+             resolved_at: ^resolved_at,
+             assigned_agent_id: ^agent_id,
+             assigned_at: assigned_at
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert assigned_at == assigned.assigned_at
+    assert resolution_audit_count(treatment, agent) == 1
+    refute_push "treatment:resolved", _payload
+  end
+
+  test "commercial user receives forbidden when resolving through the channel" do
+    {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-resolution-commercial"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_007, commercial.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-commercial", %{current_user: commercial})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:resolve", %{})
+
+    assert_reply ref, :error, %{reason: "forbidden"}
+
+    assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert resolution_audit_count(treatment, commercial) == 0
+  end
+
+  test "another logistics agent receives not_assigned_agent when resolving through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-other-owner"}, %{})
+    assigned_agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_008, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(assigned_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(other_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, assigned_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-other-agent", %{current_user: other_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:resolve", %{})
+
+    assert_reply ref, :error, %{reason: "not_assigned_agent"}
+
+    assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert resolution_audit_count(treatment, other_agent) == 0
+  end
+
+  test "resolved treatment returns invalid_status through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-status-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_009, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-invalid-status", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:resolve", %{})
+
+    assert_reply ref, :error, %{reason: "invalid_status"}
+
+    assert %{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert resolved_by_id == resolved.resolved_by_id
+    assert resolved_at == resolved.resolved_at
+    assert resolution_audit_count(treatment, agent) == 1
+  end
+
+  test "room without treatment returns not_found when resolving through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-generic-room"}, %{})
+    {:ok, room} = Rooms.create_room(%{"name" => "Sala genérica para resolução"}, owner.id)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-generic-room", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    channel_pid = socket.channel_pid
+    channel_ref = Process.monitor(channel_pid)
+    ref = push(socket, "treatment:resolve", %{})
+
+    assert_reply ref, :error, %{reason: "not_found"}
+    refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
+  end
+
+  test "client identity fields do not control who resolves through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-payload-owner"}, %{})
+    agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_010, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-payload-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref =
+      push(socket, "treatment:resolve", %{
+        "resolved_by_id" => other_agent.id,
+        "agent_id" => other_agent.id
+      })
+
+    assert_reply ref, :ok, %{resolved_by_id: resolved_by_id}
+    assert resolved_by_id == agent.id
+    assert Repo.get!(Treatment, assigned.id).resolved_by_id == agent.id
+  end
+
+  test "client timestamp and status fields do not control resolution through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-fields-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_011, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-fields-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref =
+      push(socket, "treatment:resolve", %{
+        "resolved_at" => "2000-01-01T00:00:00Z",
+        "status" => "closed"
+      })
+
+    assert_reply ref, :ok, %{status: "resolved", resolved_at: resolved_at}
+    refute to_string(resolved_at) == "2000-01-01T00:00:00Z"
+
+    assert %{status: "resolved", resolved_at: persisted_resolved_at} =
+             Repo.get!(Treatment, assigned.id)
+
+    assert persisted_resolved_at == resolved_at
+  end
+
+  test "unexpected treatment resolution result returns a safe fallback" do
+    agent = logistics_agent_fixture()
+    socket = %Phoenix.Socket{assigns: %{current_user: agent, room_id: "invalid-room-id"}}
+
+    assert {:reply, {:error, %{reason: "treatment_resolution_failed"}}, ^socket} =
+             RoomChannel.handle_in("treatment:resolve", %{}, socket)
+  end
+
   test "commercial user receives forbidden when assigning through the channel" do
     {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-treatment-commercial"}, %{})
 
@@ -134,6 +339,37 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     assert %{assigned_agent_id: ^agent_id, assigned_at: ^first_assigned_at} =
              Repo.get!(Treatment, treatment.id)
+  end
+
+  test "stale caller state does not broadcast an idempotent assignment retry" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-treatment-stale-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: stale_treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_012, owner.id)
+
+    assert stale_treatment.assigned_agent_id == nil
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(stale_treatment, agent)
+    assert assigned.assigned_agent_id == agent.id
+    assert stale_treatment.assigned_agent_id == nil
+
+    assert {:ok, idempotent_treatment, :idempotent} =
+             Treatments.assign_agent_for_room(room.id, agent)
+
+    assert idempotent_treatment.assigned_agent_id == agent.id
+    assert idempotent_treatment.assigned_at == assigned.assigned_at
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-treatment-stale-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:assign_to_me", %{})
+
+    assert_reply ref, :ok, %{assigned_at: assigned_at}
+    refute_push "treatment:agent_assigned", _duplicate
+    assert assigned_at == assigned.assigned_at
   end
 
   test "client identity and timestamp fields do not control assignment" do
@@ -434,5 +670,11 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
       role: "logistics_agent"
     })
     |> Repo.insert!()
+  end
+
+  defp resolution_audit_count(treatment, user) do
+    treatment.id
+    |> Treatments.list_audit_events(user.id)
+    |> Enum.count(&(&1.event_type == "treatment_resolved"))
   end
 end

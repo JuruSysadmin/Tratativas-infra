@@ -179,6 +179,26 @@ defmodule ChatWeb.RoomChannel do
     end
   end
 
+  def handle_in("treatment:resolve", _params, socket) do
+    result =
+      Treatments.resolve_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
+
+    case result do
+      {:ok, resolved_treatment} ->
+        {:reply, {:ok, treatment_resolution_payload(resolved_treatment)}, socket}
+
+      {:error, reason}
+      when reason in [:forbidden, :not_assigned_agent, :invalid_status, :not_found] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_resolution_failed"}}, socket}
+    end
+  end
+
   def handle_in("typing:start", _params, socket) do
     Presence.update_typing(socket, socket.assigns.current_user, true)
     {:noreply, socket}
@@ -226,6 +246,15 @@ defmodule ChatWeb.RoomChannel do
       treatment_id: treatment.id,
       assigned_agent_id: treatment.assigned_agent_id,
       assigned_at: treatment.assigned_at
+    }
+  end
+
+  defp treatment_resolution_payload(treatment) do
+    %{
+      treatment_id: treatment.id,
+      status: treatment.status,
+      resolved_by_id: treatment.resolved_by_id,
+      resolved_at: treatment.resolved_at
     }
   end
 end
