@@ -53,6 +53,19 @@ defmodule Chat.Treatments do
     end
   end
 
+  def transfer_agent(
+        %Treatment{id: treatment_id, room_id: room_id},
+        %User{} = current_agent,
+        %User{} = target_agent
+      ) do
+    with :ok <- Authorization.authorize(current_agent, "treatment.transfer") do
+      Rooms.with_member_room(current_agent.id, room_id, fn _room ->
+        run_transfer_transaction(treatment_id, current_agent, target_agent)
+      end)
+      |> normalize_transfer_member_room_result()
+    end
+  end
+
   def get_by_room_id(room_id) do
     Repo.get_by(Treatment, room_id: room_id)
   end
@@ -244,6 +257,17 @@ defmodule Chat.Treatments do
     end
   end
 
+  defp run_transfer_transaction(treatment_id, current_agent, target_agent) do
+    if Repo.in_transaction?() do
+      transfer_locked_and_audit(treatment_id, current_agent, target_agent)
+    else
+      Repo.transaction(fn ->
+        transfer_locked_and_audit(treatment_id, current_agent, target_agent)
+      end)
+      |> normalize_transfer_transaction_result()
+    end
+  end
+
   defp assign_room_treatment(room_id, user) do
     case get_by_room_id(room_id) do
       nil ->
@@ -304,6 +328,24 @@ defmodule Chat.Treatments do
     end
   end
 
+  defp transfer_locked_and_audit(treatment_id, current_agent, target_agent) do
+    case transfer_locked(treatment_id, current_agent, target_agent) do
+      {:ok, treatment, :transferred} ->
+        metadata = %{
+          "previous_agent_id" => current_agent.id,
+          "assigned_agent_id" => target_agent.id
+        }
+
+        case record_event(treatment, current_agent.id, "treatment_transferred", metadata) do
+          {:ok, _event} -> {:ok, treatment, :transferred}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      error ->
+        error
+    end
+  end
+
   defp resolve_locked(treatment_id, user) do
     treatment =
       from(treatment in Treatment,
@@ -345,6 +387,70 @@ defmodule Chat.Treatments do
       %Treatment{} ->
         {:error, :invalid_status}
     end
+  end
+
+  defp transfer_locked(treatment_id, current_agent, target_agent) do
+    treatment = locked_authorized_treatment(treatment_id, current_agent.id)
+
+    case treatment do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{status: "in_progress", assigned_agent_id: assigned_agent_id}
+      when assigned_agent_id != current_agent.id ->
+        {:error, :not_assigned_agent}
+
+      %Treatment{status: "in_progress"} ->
+        with :ok <- validate_transfer_target(treatment.room_id, current_agent, target_agent) do
+          transfer_locked_treatment(treatment, target_agent)
+        end
+
+      %Treatment{} ->
+        {:error, :invalid_status}
+    end
+  end
+
+  defp transfer_locked_treatment(treatment, target_agent) do
+    treatment
+    |> Treatment.transfer_changeset(target_agent.id, DateTime.utc_now())
+    |> Repo.update()
+    |> case do
+      {:ok, transferred_treatment} -> {:ok, transferred_treatment, :transferred}
+      error -> error
+    end
+  end
+
+  defp validate_transfer_target(room_id, current_agent, target_agent) do
+    cond do
+      current_agent.id == target_agent.id ->
+        {:error, :same_agent}
+
+      not valid_target_agent?(room_id, target_agent.id) ->
+        {:error, :invalid_target_agent}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp valid_target_agent?(room_id, target_agent_id) do
+    with %User{role: "logistics_agent"} <- Repo.get(User, target_agent_id),
+         1 <- locked_target_membership(room_id, target_agent_id) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  defp locked_target_membership(room_id, target_agent_id) do
+    from(membership in "room_members",
+      where:
+        membership.room_id == type(^room_id, :binary_id) and
+          membership.user_id == type(^target_agent_id, :binary_id),
+      select: 1,
+      lock: "FOR SHARE"
+    )
+    |> Repo.one()
   end
 
   defp unassign_locked_treatment(treatment) do
@@ -435,6 +541,12 @@ defmodule Chat.Treatments do
   defp normalize_unassign_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_unassign_transaction_result({:error, reason}), do: {:error, reason}
 
+  defp normalize_transfer_transaction_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_transfer_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_transfer_transaction_result({:error, reason}), do: {:error, reason}
+
   defp normalize_resolution_transaction_result({:ok, {:ok, treatment, result}}),
     do: {:ok, treatment, result}
 
@@ -468,4 +580,11 @@ defmodule Chat.Treatments do
   defp normalize_unassign_member_room_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_unassign_member_room_result({:error, :forbidden}), do: {:error, :not_found}
   defp normalize_unassign_member_room_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_transfer_member_room_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_transfer_member_room_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_transfer_member_room_result({:error, :forbidden}), do: {:error, :not_found}
+  defp normalize_transfer_member_room_result({:error, reason}), do: {:error, reason}
 end

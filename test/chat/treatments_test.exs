@@ -85,6 +85,200 @@ defmodule Chat.TreatmentsTest do
     assert audit_event_count(treatment, user, "treatment_unassigned") == 1
   end
 
+  test "assigned agent can transfer an in-progress treatment to another logistics member", %{
+    user: user
+  } do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_530, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    assert {:ok, transferred, :transferred} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+
+    assert transferred.status == "in_progress"
+    assert transferred.assigned_agent_id == target_agent.id
+    assert DateTime.compare(transferred.assigned_at, assigned.assigned_at) == :gt
+
+    target_agent_id = target_agent.id
+
+    assert %{status: "in_progress", assigned_agent_id: ^target_agent_id} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert [event | _] = Treatments.list_audit_events(treatment.id, user.id)
+    assert event.event_type == "treatment_transferred"
+    assert event.actor_id == current_agent.id
+    assert event.metadata["previous_agent_id"] == current_agent.id
+    assert event.metadata["assigned_agent_id"] == target_agent.id
+  end
+
+  test "commercial user cannot transfer a treatment", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_531, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    assert {:error, :forbidden} = Treatments.transfer_agent(assigned, user, target_agent)
+    assert Repo.get!(Treatment, treatment.id).assigned_agent_id == current_agent.id
+    assert audit_event_count(treatment, user, "treatment_transferred") == 0
+  end
+
+  test "only the assigned agent can transfer a treatment", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_532, user.id)
+
+    for agent <- [current_agent, other_agent, target_agent] do
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    end
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    assert {:error, :not_assigned_agent} =
+             Treatments.transfer_agent(assigned, other_agent, target_agent)
+  end
+
+  test "target must be another logistics member", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+    missing_target = %User{id: Ecto.UUID.generate(), role: "logistics_agent"}
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_533, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    assert {:error, :invalid_target_agent} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+
+    assert {:error, :invalid_target_agent} =
+             Treatments.transfer_agent(assigned, current_agent, user)
+
+    assert {:error, :invalid_target_agent} =
+             Treatments.transfer_agent(assigned, current_agent, missing_target)
+
+    assert {:error, :same_agent} =
+             Treatments.transfer_agent(assigned, current_agent, current_agent)
+  end
+
+  test "current agent outside the room receives not_found", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_534, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+    assert {:ok, 1} = Rooms.leave_room(current_agent.id, room.id)
+
+    assert {:error, :not_found} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+  end
+
+  test "only in-progress treatments can be transferred", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    for {status, order_id} <- [
+          {"open", 9_998_043_535},
+          {"resolved", 9_998_043_536},
+          {"closed", 9_998_043_537}
+        ] do
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(order_id, user.id)
+
+      for agent <- [current_agent, target_agent] do
+        assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+      end
+
+      treatment =
+        case status do
+          "open" ->
+            treatment
+
+          "resolved" ->
+            {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+            {:ok, resolved} = Treatments.resolve(assigned, current_agent)
+            resolved
+
+          "closed" ->
+            {:ok, closed} = Treatments.close(treatment, user.id)
+            closed
+        end
+
+      assert {:error, :invalid_status} =
+               Treatments.transfer_agent(treatment, current_agent, target_agent)
+    end
+  end
+
+  test "stale caller state cannot transfer a treatment", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_538, user.id)
+
+    for agent <- [current_agent, other_agent, target_agent] do
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    end
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    assert {:ok, _transferred} =
+             assigned
+             |> Treatment.transfer_changeset(other_agent.id, DateTime.utc_now())
+             |> Repo.update()
+
+    assert {:error, :not_assigned_agent} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+  end
+
+  test "transfer rolls back when the audit event cannot be persisted", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_539, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{}} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+
+    current_agent_id = current_agent.id
+
+    assert %{status: "in_progress", assigned_agent_id: ^current_agent_id} =
+             Repo.get!(Treatment, treatment.id)
+  end
+
   test "commercial user cannot unassign a treatment", %{user: user} do
     agent = logistics_agent_fixture()
 
@@ -277,6 +471,136 @@ defmodule Chat.TreatmentsTest do
     missing_treatment = %Treatment{id: Ecto.UUID.generate(), room_id: room.id}
 
     assert {:error, :not_found} = Treatments.unassign(missing_treatment, agent)
+  end
+
+  test "concurrent transfers allow only one effective transition", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    first_target = logistics_agent_fixture()
+    second_target = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_540, user.id)
+
+    for agent <- [current_agent, first_target, second_target] do
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    end
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    tasks =
+      for target <- [first_target, second_target] do
+        task =
+          Task.async(fn ->
+            receive do
+              :transfer -> Treatments.transfer_agent(assigned, current_agent, target)
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        task
+      end
+
+    Enum.each(tasks, &send(&1.pid, :transfer))
+
+    outcomes = Enum.map(tasks, &Task.await(&1, 5_000))
+
+    assert Enum.count(outcomes, &match?({:ok, _, :transferred}, &1)) == 1
+    assert Enum.count(outcomes, &(&1 == {:error, :not_assigned_agent})) == 1
+    assert audit_event_count(treatment, user, "treatment_transferred") == 1
+
+    assert %{status: "in_progress", assigned_agent_id: assigned_agent_id} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert assigned_agent_id in [first_target.id, second_target.id]
+  end
+
+  test "transfer and unassign allow only one effective transition", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_541, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    tasks =
+      [
+        fn -> Treatments.transfer_agent(assigned, current_agent, target_agent) end,
+        fn -> Treatments.unassign(assigned, current_agent) end
+      ]
+      |> Enum.map(fn operation ->
+        task =
+          Task.async(fn ->
+            receive do
+              :run -> operation.()
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        task
+      end)
+
+    Enum.each(tasks, &send(&1.pid, :run))
+    outcomes = Enum.map(tasks, &Task.await(&1, 5_000))
+
+    assert Enum.count(outcomes, &match?({:ok, _, _}, &1)) == 1
+    assert Enum.count(outcomes, &match?({:error, _}, &1)) == 1
+
+    assert %{
+             "treatment_transferred" => transferred_events,
+             "treatment_unassigned" => unassigned_events
+           } =
+             audit_event_counts(treatment, user, ["treatment_transferred", "treatment_unassigned"])
+
+    assert transferred_events + unassigned_events == 1
+  end
+
+  test "transfer and resolve allow only one effective transition", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_542, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    tasks =
+      [
+        fn -> Treatments.transfer_agent(assigned, current_agent, target_agent) end,
+        fn -> Treatments.resolve(assigned, current_agent) end
+      ]
+      |> Enum.map(fn operation ->
+        task =
+          Task.async(fn ->
+            receive do
+              :run -> operation.()
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        task
+      end)
+
+    Enum.each(tasks, &send(&1.pid, :run))
+    outcomes = Enum.map(tasks, &Task.await(&1, 5_000))
+
+    assert Enum.count(outcomes, fn outcome ->
+             match?({:ok, _, :transferred}, outcome) or match?({:ok, _}, outcome)
+           end) == 1
+
+    assert Enum.count(outcomes, &match?({:error, _}, &1)) == 1
+
+    assert %{
+             "treatment_transferred" => transferred_events,
+             "treatment_resolved" => resolved_events
+           } =
+             audit_event_counts(treatment, user, ["treatment_transferred", "treatment_resolved"])
+
+    assert transferred_events + resolved_events == 1
   end
 
   test "assigned agent can resolve an in-progress treatment", %{user: user} do
@@ -982,6 +1306,14 @@ defmodule Chat.TreatmentsTest do
     treatment.id
     |> Treatments.list_audit_events(user.id)
     |> Enum.count(&(&1.event_type == event_type))
+  end
+
+  defp audit_event_counts(treatment, user, event_types) do
+    treatment.id
+    |> Treatments.list_audit_events(user.id)
+    |> Enum.filter(&(&1.event_type in event_types))
+    |> Enum.frequencies_by(& &1.event_type)
+    |> Map.merge(Map.new(event_types, &{&1, 0}), fn _key, existing, _default -> existing end)
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:chat, key)
