@@ -114,6 +114,308 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert resolution_audit_count(treatment, agent) == 1
   end
 
+  test "assigned logistics agent can transfer the room treatment through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-owner"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_007, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-agent", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :ok, %{
+      treatment_id: treatment_id,
+      status: "in_progress",
+      assigned_agent_id: assigned_agent_id,
+      assigned_at: assigned_at
+    }
+
+    assert treatment_id == treatment.id
+    assert assigned_agent_id == target_agent.id
+    assert assigned_at != assigned.assigned_at
+    assert transfer_audit_count(treatment, current_agent) == 1
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      status: "in_progress",
+      assigned_agent_id: ^assigned_agent_id,
+      assigned_at: ^assigned_at
+    }
+  end
+
+  test "transferred treatment reaches every room subscriber from one transition" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-broadcast-owner"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_016, owner.id)
+
+    for agent <- [current_agent, target_agent] do
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    end
+
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, current_socket} =
+      UserSocket
+      |> socket("channel-transfer-broadcast-current", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    {:ok, _reply, _target_socket} =
+      UserSocket
+      |> socket("channel-transfer-broadcast-target", %{current_user: target_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(current_socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :ok, %{treatment_id: treatment_id, assigned_agent_id: target_agent_id}
+    assert target_agent_id == target_agent.id
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      assigned_agent_id: ^target_agent_id
+    }
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      assigned_agent_id: ^target_agent_id
+    }
+
+    refute_push "treatment:transferred", _duplicate
+    assert transfer_audit_count(treatment, current_agent) == 1
+  end
+
+  test "commercial member receives forbidden when transferring through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-commercial"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_008, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-commercial", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :error, %{reason: "forbidden"}
+    refute_push "treatment:transferred", _payload
+    assert transfer_audit_count(treatment, owner) == 0
+  end
+
+  test "non-owner logistics agent receives not_assigned_agent" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-owner-error"}, %{})
+    current_agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_009, owner.id)
+
+    for agent <- [current_agent, other_agent, target_agent] do
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    end
+
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-non-owner", %{current_user: other_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :error, %{reason: "not_assigned_agent"}
+    refute_push "treatment:transferred", _payload
+  end
+
+  test "invalid target and same agent errors are mapped by the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-target-errors"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_010, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-target-errors", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => owner.id})
+    assert_reply ref, :error, %{reason: "invalid_target_agent"}
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => current_agent.id})
+    assert_reply ref, :error, %{reason: "same_agent"}
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => Ecto.UUID.generate()})
+    assert_reply ref, :error, %{reason: "invalid_target_agent"}
+    refute_push "treatment:transferred", _payload
+  end
+
+  test "target without room membership receives invalid_target_agent" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-target-membership"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_011, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-target-membership", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :error, %{reason: "invalid_target_agent"}
+    refute_push "treatment:transferred", _payload
+  end
+
+  test "current agent without room membership receives not_found" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-current-membership"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_012, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+    socket = %Phoenix.Socket{assigns: %{current_user: current_agent, room_id: room.id}}
+
+    assert {:reply, {:error, %{reason: "not_found"}}, ^socket} =
+             RoomChannel.handle_in(
+               "treatment:transfer",
+               %{"target_agent_id" => target_agent.id},
+               socket
+             )
+
+    assert transfer_audit_count(treatment, owner) == 0
+  end
+
+  test "extra client fields do not control transfer and missing target is stable" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-payload"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_013, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-payload", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref =
+      push(socket, "treatment:transfer", %{
+        "target_agent_id" => target_agent.id,
+        "current_agent_id" => Ecto.UUID.generate(),
+        "assigned_agent_id" => Ecto.UUID.generate(),
+        "assigned_at" => "2000-01-01T00:00:00Z",
+        "status" => "open"
+      })
+
+    assert_reply ref, :ok, %{
+      treatment_id: treatment_id,
+      assigned_agent_id: assigned_agent_id,
+      assigned_at: assigned_at,
+      status: "in_progress"
+    }
+
+    assert assigned_agent_id == target_agent.id
+    assert assigned_at != assigned.assigned_at
+    assert Repo.get!(Treatment, treatment.id).assigned_at == assigned_at
+
+    assert_push "treatment:transferred", %{
+      treatment_id: ^treatment_id,
+      assigned_agent_id: ^assigned_agent_id,
+      assigned_at: ^assigned_at,
+      status: "in_progress"
+    }
+
+    ref = push(socket, "treatment:transfer", %{})
+    assert_reply ref, :error, %{reason: "invalid_target_agent"}
+    refute_push "treatment:transferred", _payload
+  end
+
+  test "in-progress is the only transferable treatment status" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-invalid-status"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_014, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+    assert {:ok, resolved} = Treatments.resolve(treatment, current_agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-invalid-status", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:transferred", _payload
+    assert Repo.get!(Treatment, treatment.id).status == resolved.status
+  end
+
+  test "room without treatment returns not_found without stopping the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-generic-room"}, %{})
+    current_agent = logistics_agent_fixture()
+
+    assert {:ok, room} =
+             Rooms.create_room(%{"name" => "Sala generica para transferencia"}, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-generic-room", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    channel_pid = socket.channel_pid
+    channel_ref = Process.monitor(channel_pid)
+
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => Ecto.UUID.generate()})
+
+    assert_reply ref, :error, %{reason: "not_found"}
+    refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
+    refute_push "treatment:transferred", _payload
+  end
+
   test "commercial member can reopen the room treatment through the channel" do
     {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-reopen-commercial"}, %{})
     agent = logistics_agent_fixture()
@@ -1080,5 +1382,11 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     treatment.id
     |> Treatments.list_audit_events(user.id)
     |> Enum.count(&(&1.event_type == "treatment_reopened"))
+  end
+
+  defp transfer_audit_count(treatment, user) do
+    treatment.id
+    |> Treatments.list_audit_events(user.id)
+    |> Enum.count(&(&1.event_type == "treatment_transferred"))
   end
 end

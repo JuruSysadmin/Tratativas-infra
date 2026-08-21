@@ -222,6 +222,40 @@ defmodule ChatWeb.RoomChannel do
     end
   end
 
+  def handle_in("treatment:transfer", %{"target_agent_id" => target_agent_id}, socket) do
+    result =
+      Treatments.transfer_agent_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user,
+        target_agent_id
+      )
+
+    case result do
+      {:ok, transferred_treatment, :transferred} ->
+        payload = treatment_transfer_payload(transferred_treatment)
+        broadcast!(socket, "treatment:transferred", payload)
+        {:reply, {:ok, payload}, socket}
+
+      {:error, reason}
+      when reason in [
+             :forbidden,
+             :not_found,
+             :not_assigned_agent,
+             :invalid_target_agent,
+             :same_agent,
+             :invalid_status
+           ] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_transfer_failed"}}, socket}
+    end
+  end
+
+  def handle_in("treatment:transfer", _params, socket) do
+    {:reply, {:error, %{reason: "invalid_target_agent"}}, socket}
+  end
+
   def handle_in("typing:start", _params, socket) do
     Presence.update_typing(socket, socket.assigns.current_user, true)
     {:noreply, socket}
@@ -282,6 +316,15 @@ defmodule ChatWeb.RoomChannel do
   end
 
   defp treatment_reopen_payload(treatment) do
+    %{
+      treatment_id: treatment.id,
+      status: treatment.status,
+      assigned_agent_id: treatment.assigned_agent_id,
+      assigned_at: treatment.assigned_at
+    }
+  end
+
+  defp treatment_transfer_payload(treatment) do
     %{
       treatment_id: treatment.id,
       status: treatment.status,
