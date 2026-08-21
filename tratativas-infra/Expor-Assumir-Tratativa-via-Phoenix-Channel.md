@@ -2,13 +2,12 @@
 title: Expor Assumir Tratativa via Phoenix Channel
 type: feature
 created: "2026-08-21T01:23:50Z"
-modified: "2026-08-21T01:44:46Z"
+modified: "2026-08-21T03:25:38Z"
 author: JuruSysadmin
-status: accepted
+status: delivered
 started: "2026-08-21T01:27:12Z"
-finished: "2026-08-21T01:41:59Z"
-delivered: "2026-08-21T01:41:59Z"
-accepted: "2026-08-21T01:44:46Z"
+finished: "2026-08-21T03:25:38Z"
+delivered: "2026-08-21T03:25:38Z"
 ---
 
 # Expor Assumir Tratativa via Phoenix Channel
@@ -89,6 +88,13 @@ Começar pelos testes de Channel antes de adicionar `handle_in/3`:
 * [x] Marcar como `delivered` e aguardar revisão humana antes de `accepted`.
 
 - [x] Revisão manual: reforçar o teste de sala sem Treatment para monitorar o processo do Channel e confirmar que o reply `not_found` não encerra o Channel.
+- [x] Adicionar teste RED para auditoria treatment_assigned após nova atribuição.
+- [x] Adicionar teste RED para auditoria treatment_resolved e preservar assignment.
+- [x] Cobrir resposta estável para erro inesperado do domínio no Channel.
+- [x] Mover busca da Treatment e atribuição para Chat.Treatments.
+- [x] Tornar o handler treatment:assign_to_me exaustivo.
+- [x] Revalidar membership durante treatment:assign_to_me mantendo a membership bloqueada na operação.
+- [x] Testar socket existente após revogação de membership.
 ## Fora do escopo
 
 ```text
@@ -121,3 +127,9 @@ Revisão manual concluída: `logistics_agent + Treatment livre` retorna sucesso;
 
 @JuruSysadmin 2026-08-21
 Aceite humano confirmado pelo PM após revisão manual dos contratos: `ok`, `forbidden`, `already_assigned` e `not_found` com Channel vivo. Acceptance Criteria encerrados. O check global de diff mantém a ressalva já registrada para linha em branco preexistente em `_icebox.md`; o diff da story passa.
+
+@JuruSysadmin 2026-08-21
+Revisão tratada: RoomChannel agora chama Chat.Treatments.assign_agent_for_room/2, não acessa Repo/Treatment diretamente, diferencia atribuição nova de retry idempotente e possui fallback para erros inesperados. Atribuição e resolução gravam treatment_assigned/treatment_resolved na auditoria dentro da transação; retry não duplica evento. Verificação: 42 testes focados, precommit com 473 testes, Credo sem issues e diff focado limpo.
+
+@JuruSysadmin 2026-08-21
+Revisão adicional tratada: assign_agent_for_room/2 agora executa sob Rooms.with_member_room/3, revalidando e mantendo a membership bloqueada durante a atribuição. Socket já conectado após revogação recebe forbidden e não altera a Treatment. O handler mantém fallback para retorno inesperado. Verificação atual: 43 testes focados, precommit com 474 testes e Credo sem issues.

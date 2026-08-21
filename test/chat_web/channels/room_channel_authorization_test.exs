@@ -50,7 +50,11 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     agent_id = agent.id
 
-    assert %{assigned_agent_id: ^agent_id, assigned_at: persisted_assigned_at} =
+    assert %{
+             assigned_agent_id: ^agent_id,
+             assigned_at: persisted_assigned_at,
+             status: "in_progress"
+           } =
              Repo.get!(Treatment, treatment.id)
 
     assert persisted_assigned_at == assigned_at
@@ -176,6 +180,31 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert_reply ref, :error, %{reason: "not_found"}
     refute_push "treatment:agent_assigned", _payload
     refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
+  end
+
+  test "revoked membership cannot assign through an existing channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-revoked-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_005, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-revoked-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    assert {:ok, 1} = Rooms.leave_room(agent.id, room.id)
+
+    ref = push(socket, "treatment:assign_to_me", %{})
+
+    assert_reply ref, :error, %{reason: "forbidden"}
+    refute_push "treatment:agent_assigned", _payload
+
+    assert %{assigned_agent_id: nil, assigned_at: nil, status: "open"} =
+             Repo.get!(Treatment, treatment.id)
   end
 
   test "cannot delete a message from another room through the current room channel" do

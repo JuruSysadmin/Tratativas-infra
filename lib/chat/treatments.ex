@@ -38,8 +38,25 @@ defmodule Chat.Treatments do
   end
 
   def assign_agent(%Treatment{id: treatment_id}, %User{} = user) do
-    with :ok <- Authorization.authorize(user, "treatment.assign") do
-      Repo.transaction(fn -> assign_locked(treatment_id, user) end)
+    case assign_agent_result(treatment_id, user) do
+      {:ok, treatment, _result} -> {:ok, treatment}
+      error -> error
+    end
+  end
+
+  def assign_agent_for_room(room_id, %User{} = user) do
+    Rooms.with_member_room(user.id, room_id, fn _room ->
+      case Repo.get_by(Treatment, room_id: room_id) do
+        nil -> {:error, :not_found}
+        %Treatment{id: treatment_id} -> assign_agent_result(treatment_id, user)
+      end
+    end)
+    |> normalize_member_room_result()
+  end
+
+  def resolve(%Treatment{id: treatment_id}, %User{} = user) do
+    with :ok <- Authorization.authorize(user, "treatment.resolve") do
+      Repo.transaction(fn -> resolve_locked(treatment_id, user) end)
       |> normalize_transaction_result()
     end
   end
@@ -130,28 +147,112 @@ defmodule Chat.Treatments do
       )
       |> Repo.one()
 
+    assign_locked_state(treatment, user)
+  end
+
+  defp assign_locked_state(nil, _user), do: {:error, :not_found}
+
+  defp assign_locked_state(%Treatment{assigned_agent_id: nil, status: "open"} = treatment, user) do
+    case persist_assignment(treatment, user) do
+      {:ok, assigned_treatment} -> {:ok, assigned_treatment, :assigned}
+      error -> error
+    end
+  end
+
+  defp assign_locked_state(%Treatment{assigned_agent_id: nil}, _user),
+    do: {:error, :invalid_status}
+
+  defp assign_locked_state(
+         %Treatment{status: "in_progress", assigned_agent_id: assigned_agent_id} = treatment,
+         %User{id: assigned_agent_id}
+       ),
+       do: {:ok, treatment, :idempotent}
+
+  defp assign_locked_state(%Treatment{status: status}, _user)
+       when status in ["resolved", "closed"],
+       do: {:error, :invalid_status}
+
+  defp assign_locked_state(%Treatment{assigned_agent_id: assigned_agent_id}, %User{
+         id: assigned_agent_id
+       }),
+       do: {:error, :invalid_status}
+
+  defp assign_locked_state(%Treatment{}, _user), do: {:error, :already_assigned}
+
+  defp persist_assignment(treatment, user) do
+    treatment
+    |> Treatment.assignment_changeset(%{
+      assigned_agent_id: user.id,
+      assigned_at: DateTime.utc_now(),
+      status: "in_progress"
+    })
+    |> Repo.update()
+  end
+
+  defp assign_agent_result(treatment_id, user) do
+    with :ok <- Authorization.authorize(user, "treatment.assign") do
+      Repo.transaction(fn -> assign_locked_and_audit(treatment_id, user) end)
+      |> normalize_assignment_transaction_result()
+    end
+  end
+
+  defp assign_locked_and_audit(treatment_id, user) do
+    case assign_locked(treatment_id, user) do
+      {:ok, treatment, :assigned} ->
+        case record_event(treatment, user.id, "treatment_assigned") do
+          {:ok, _event} -> {:ok, treatment, :assigned}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      {:ok, treatment, :idempotent} ->
+        {:ok, treatment, :idempotent}
+
+      error ->
+        error
+    end
+  end
+
+  defp resolve_locked(treatment_id, user) do
+    treatment =
+      from(treatment in Treatment,
+        where: treatment.id == ^treatment_id,
+        lock: "FOR UPDATE"
+      )
+      |> Repo.one()
+
     case treatment do
       nil ->
         {:error, :not_found}
 
-      %Treatment{assigned_agent_id: nil} = treatment ->
-        assign_locked_treatment(treatment, user)
+      %Treatment{status: "in_progress", assigned_agent_id: assigned_agent_id}
+      when assigned_agent_id == user.id ->
+        resolve_locked_and_audit(treatment, user)
 
-      %Treatment{assigned_agent_id: assigned_agent_id} when assigned_agent_id == user.id ->
-        {:ok, treatment}
+      %Treatment{status: "in_progress"} ->
+        {:error, :not_assigned_agent}
 
       %Treatment{} ->
-        {:error, :already_assigned}
+        {:error, :invalid_status}
     end
   end
 
-  defp assign_locked_treatment(treatment, user) do
+  defp resolve_locked_treatment(treatment, user) do
     treatment
-    |> Treatment.assignment_changeset(%{
-      assigned_agent_id: user.id,
-      assigned_at: DateTime.utc_now()
-    })
+    |> Treatment.resolution_changeset(user.id, DateTime.utc_now())
     |> Repo.update()
+  end
+
+  defp resolve_locked_and_audit(treatment, user) do
+    case resolve_locked_treatment(treatment, user) do
+      {:ok, resolved_treatment} ->
+        case record_event(resolved_treatment, user.id, "treatment_resolved") do
+          {:ok, _event} -> {:ok, resolved_treatment}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      error ->
+        error
+    end
   end
 
   defp authorized_treatment(treatment_id, user_id) do
@@ -168,4 +269,16 @@ defmodule Chat.Treatments do
   defp normalize_transaction_result({:ok, {:ok, result}}), do: {:ok, result}
   defp normalize_transaction_result({:ok, result}), do: {:ok, result}
   defp normalize_transaction_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_assignment_transaction_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_assignment_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_assignment_transaction_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_member_room_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_member_room_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_member_room_result({:error, reason}), do: {:error, reason}
 end

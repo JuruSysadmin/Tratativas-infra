@@ -43,6 +43,156 @@ defmodule Chat.TreatmentsTest do
 
     assert assigned.assigned_agent_id == agent.id
     assert assigned.assigned_at != nil
+    assert assigned.status == "in_progress"
+
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+
+    agent_id = agent.id
+
+    assert [
+             %{event_type: "treatment_assigned", actor_id: ^agent_id},
+             %{event_type: "treatment_created", actor_id: _owner_id}
+           ] =
+             Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "assigned agent can resolve an in-progress treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_489, user.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert resolved.status == "resolved"
+    assert resolved.resolved_by_id == agent.id
+    assert resolved.resolved_at != nil
+
+    assert %{
+             status: "resolved",
+             resolved_by_id: resolved_by_id,
+             resolved_at: resolved_at,
+             assigned_agent_id: assigned_agent_id,
+             assigned_at: assigned_at
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert resolved_by_id == agent.id
+    assert resolved_at == resolved.resolved_at
+    assert assigned_agent_id == assigned.assigned_agent_id
+    assert assigned_at == assigned.assigned_at
+
+    agent_id = agent.id
+
+    assert [
+             %{event_type: "treatment_resolved", actor_id: ^agent_id},
+             %{event_type: "treatment_assigned", actor_id: ^agent_id},
+             %{event_type: "treatment_created", actor_id: _owner_id}
+           ] =
+             Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "unauthorized user cannot resolve a treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_490, user.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:error, :forbidden} = Treatments.resolve(assigned, user)
+
+    assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+  end
+
+  test "authorized user who is not assigned cannot resolve a treatment", %{user: user} do
+    assigned_agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_491, user.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, assigned_agent)
+
+    assert {:error, :not_assigned_agent} = Treatments.resolve(assigned, other_agent)
+
+    assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+  end
+
+  test "open treatment cannot be resolved", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_492, user.id)
+
+    assert {:error, :invalid_status} = Treatments.resolve(treatment, agent)
+
+    assert %{status: "open", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+  end
+
+  test "resolved treatment cannot be resolved again", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_493, user.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:error, :invalid_status} = Treatments.resolve(resolved, agent)
+    agent_id = agent.id
+
+    assert %{status: "resolved", resolved_by_id: ^agent_id, resolved_at: resolved_at} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert resolved_at == resolved.resolved_at
+  end
+
+  test "closed treatment cannot be resolved", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_494, user.id)
+    assert {:ok, closed} = Treatments.close(treatment, user.id)
+
+    assert {:error, :invalid_status} = Treatments.resolve(closed, agent)
+
+    assert %{status: "closed", resolved_by_id: nil, resolved_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+  end
+
+  test "resolved agent can be preloaded", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_495, user.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    resolved = Repo.preload(resolved, :resolved_by)
+
+    assert %User{id: resolved_by_id, role: "logistics_agent"} = resolved.resolved_by
+    assert resolved_by_id == agent.id
+  end
+
+  test "concurrent resolution allows only the first transition", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_496, user.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    tasks =
+      for _ <- 1..2 do
+        task =
+          Task.async(fn ->
+            receive do
+              :resolve -> Treatments.resolve(assigned, agent)
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        task
+      end
+
+    Enum.each(tasks, &send(&1.pid, :resolve))
+
+    outcomes =
+      tasks
+      |> Enum.map(&Task.await(&1, 5_000))
+      |> Enum.map(fn
+        {:ok, _treatment} -> :ok
+        {:error, :invalid_status} -> :invalid_status
+      end)
+      |> Enum.sort()
+
+    assert [:invalid_status, :ok] = outcomes
+    agent_id = agent.id
+    assert %{status: "resolved", resolved_by_id: ^agent_id} = Repo.get!(Treatment, treatment.id)
   end
 
   test "commercial user cannot assign a treatment", %{user: user} do
@@ -77,6 +227,62 @@ defmodule Chat.TreatmentsTest do
 
     assert second.assigned_agent_id == agent.id
     assert second.assigned_at == first.assigned_at
+    assert second.status == "in_progress"
+
+    agent_id = agent.id
+
+    assert [
+             %{event_type: "treatment_assigned", actor_id: ^agent_id},
+             %{event_type: "treatment_created"}
+           ] =
+             Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "cannot assign a treatment outside the open state", %{user: user} do
+    agent = logistics_agent_fixture()
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_486, user.id)
+    assert {:ok, closed_treatment} = Treatments.close(treatment, user.id)
+
+    assert {:error, :invalid_status} = Treatments.assign_agent(closed_treatment, agent)
+
+    assert %{status: "closed", assigned_agent_id: nil, assigned_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+  end
+
+  test "resolved and closed treatments reject assignment", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    for {status, order_id} <- [{"resolved", 9_998_043_487}, {"closed", 9_998_043_488}] do
+      assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(order_id, user.id)
+
+      assert {:ok, transitioned} =
+               treatment
+               |> Treatment.changeset(%{status: status})
+               |> Repo.update()
+
+      assert {:error, :invalid_status} = Treatments.assign_agent(transitioned, agent)
+
+      assert %{status: ^status, assigned_agent_id: nil, assigned_at: nil} =
+               Repo.get!(Treatment, treatment.id)
+    end
+  end
+
+  test "assigned agent cannot reassign a resolved or closed treatment", %{user: user} do
+    agent = logistics_agent_fixture()
+    other_agent = logistics_agent_fixture()
+
+    for {status, order_id} <- [{"resolved", 9_998_043_497}, {"closed", 9_998_043_498}] do
+      assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(order_id, user.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+      assert {:ok, transitioned} =
+               assigned
+               |> Treatment.changeset(%{status: status})
+               |> Repo.update()
+
+      assert {:error, :invalid_status} = Treatments.assign_agent(transitioned, agent)
+      assert {:error, :invalid_status} = Treatments.assign_agent(transitioned, other_agent)
+    end
   end
 
   test "assignment uses the current persisted treatment state", %{user: user} do
