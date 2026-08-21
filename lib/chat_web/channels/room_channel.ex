@@ -187,8 +187,10 @@ defmodule ChatWeb.RoomChannel do
       )
 
     case result do
-      {:ok, resolved_treatment} ->
-        {:reply, {:ok, treatment_resolution_payload(resolved_treatment)}, socket}
+      {:ok, resolved_treatment, :resolved} ->
+        payload = treatment_resolution_payload(resolved_treatment)
+        broadcast!(socket, "treatment:resolved", payload)
+        {:reply, {:ok, payload}, socket}
 
       {:error, reason}
       when reason in [:forbidden, :not_assigned_agent, :invalid_status, :not_found] ->

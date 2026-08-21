@@ -99,8 +99,99 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
            } = Repo.get!(Treatment, treatment.id)
 
     assert assigned_at == assigned.assigned_at
+
+    assert_push "treatment:resolved", %{
+      treatment_id: ^treatment_id,
+      status: "resolved",
+      resolved_by_id: ^resolved_by_id,
+      resolved_at: ^resolved_at
+    }
+
+    retry_ref = push(socket, "treatment:resolve", %{})
+    assert_reply retry_ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:resolved", _duplicate
+
     assert resolution_audit_count(treatment, agent) == 1
-    refute_push "treatment:resolved", _payload
+  end
+
+  test "concurrent channel resolutions publish exactly one event" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-race-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_013, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, first_socket} =
+      UserSocket
+      |> socket("channel-resolution-race-agent-1", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    {:ok, _reply, second_socket} =
+      UserSocket
+      |> socket("channel-resolution-race-agent-2", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    first_ref = push(first_socket, "treatment:resolve", %{})
+    second_ref = push(second_socket, "treatment:resolve", %{})
+
+    assert_reply first_ref, first_status, first_payload
+    assert_reply second_ref, second_status, second_payload
+
+    assert [:error, :ok] = Enum.sort([first_status, second_status])
+
+    assert Enum.any?([first_payload, second_payload], fn
+             %{reason: "invalid_status"} -> true
+             _payload -> false
+           end)
+
+    assert_push "treatment:resolved", %{
+      treatment_id: treatment_id,
+      status: "resolved",
+      resolved_by_id: resolved_by_id,
+      resolved_at: resolved_at
+    }
+
+    assert_push "treatment:resolved", %{
+      treatment_id: ^treatment_id,
+      status: "resolved",
+      resolved_by_id: ^resolved_by_id,
+      resolved_at: ^resolved_at
+    }
+
+    assert treatment_id == treatment.id
+    assert resolved_by_id == agent.id
+    assert resolved_at != nil
+    refute_push "treatment:resolved", _duplicate
+    assert resolution_audit_count(treatment, agent) == 1
+  end
+
+  test "stale caller state cannot trigger a duplicate resolution broadcast" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-stale-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_014, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, stale_assigned} = Treatments.assign_agent(treatment, agent)
+    assert stale_assigned.status == "in_progress"
+    assert {:ok, resolved} = Treatments.resolve(stale_assigned, agent)
+    assert stale_assigned.status == "in_progress"
+    assert resolved.status == "resolved"
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolution-stale-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:resolve", %{})
+
+    assert_reply ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:resolved", _duplicate
+    assert resolution_audit_count(treatment, agent) == 1
   end
 
   test "commercial user receives forbidden when resolving through the channel" do
@@ -121,6 +212,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     ref = push(socket, "treatment:resolve", %{})
 
     assert_reply ref, :error, %{reason: "forbidden"}
+    refute_push "treatment:resolved", _payload
 
     assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
              Repo.get!(Treatment, treatment.id)
@@ -148,6 +240,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     ref = push(socket, "treatment:resolve", %{})
 
     assert_reply ref, :error, %{reason: "not_assigned_agent"}
+    refute_push "treatment:resolved", _payload
 
     assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
              Repo.get!(Treatment, treatment.id)
@@ -174,6 +267,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     ref = push(socket, "treatment:resolve", %{})
 
     assert_reply ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:resolved", _payload
 
     assert %{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at} =
              Repo.get!(Treatment, treatment.id)
@@ -197,6 +291,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     ref = push(socket, "treatment:resolve", %{})
 
     assert_reply ref, :error, %{reason: "not_found"}
+    refute_push "treatment:resolved", _payload
     refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
   end
 

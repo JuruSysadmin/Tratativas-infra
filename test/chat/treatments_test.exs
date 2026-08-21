@@ -4,6 +4,7 @@ defmodule Chat.TreatmentsTest do
   alias Chat.Accounts.User
   alias Chat.Auth.Identity
   alias Chat.Repo
+  alias Chat.Rooms
   alias Chat.Treatments
   alias Chat.Treatments.Treatment
   alias Ecto.Adapters.SQL.Sandbox
@@ -96,6 +97,239 @@ defmodule Chat.TreatmentsTest do
              %{event_type: "treatment_created", actor_id: _owner_id}
            ] =
              Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "commercial user can reopen a resolved treatment", %{user: commercial} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_501, commercial.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:ok, reopened, :reopened} = Treatments.reopen(resolved, commercial)
+    assert reopened.status == "in_progress"
+    assert reopened.assigned_agent_id == assigned.assigned_agent_id
+    assert reopened.assigned_at == assigned.assigned_at
+    assert reopened.resolved_by_id == nil
+    assert reopened.resolved_at == nil
+
+    assert {:error, :invalid_status} = Treatments.reopen(resolved, commercial)
+    assert audit_event_count(treatment, commercial, "treatment_reopened") == 1
+  end
+
+  test "logistics agent can reopen a resolved treatment", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_502, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:ok, reopened, :reopened} = Treatments.reopen(resolved, agent)
+    assert reopened.status == "in_progress"
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 1
+  end
+
+  test "unauthorized role cannot reopen a resolved treatment", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_503, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+    unauthorized = %{owner | role: "unknown"}
+
+    assert {:error, :forbidden} = Treatments.reopen(resolved, unauthorized)
+
+    assert %{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert resolved_by_id == resolved.resolved_by_id
+    assert resolved_at == resolved.resolved_at
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+  end
+
+  test "authorized user cannot reopen a treatment outside their rooms", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, outsider} =
+             Identity.sync_user(%{"sub" => "treatment-reopen-outsider"}, %{})
+
+    assert outsider.role == "commercial"
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_510, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:error, :not_found} = Treatments.reopen(resolved, outsider)
+
+    assert %{
+             status: "resolved",
+             assigned_agent_id: assigned_agent_id,
+             assigned_at: assigned_at,
+             resolved_by_id: resolved_by_id,
+             resolved_at: resolved_at
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert assigned_agent_id == resolved.assigned_agent_id
+    assert assigned_at == resolved.assigned_at
+    assert resolved_by_id == resolved.resolved_by_id
+    assert resolved_at == resolved.resolved_at
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+  end
+
+  test "only resolved treatments can be reopened", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    for {status, order_id} <- [
+          {"open", 9_998_043_504},
+          {"in_progress", 9_998_043_505},
+          {"closed", 9_998_043_506}
+        ] do
+      assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(order_id, owner.id)
+
+      treatment =
+        case status do
+          "open" ->
+            treatment
+
+          "in_progress" ->
+            assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+            assigned
+
+          "closed" ->
+            assert {:ok, closed} = Treatments.close(treatment, owner.id)
+            closed
+        end
+
+      assert {:error, :invalid_status} = Treatments.reopen(treatment, owner)
+      assert Repo.get!(Treatment, treatment.id).status == status
+      assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+    end
+  end
+
+  test "reopen evaluates persisted state instead of stale caller state", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_507, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, stale_resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:ok, persisted_closed} =
+             stale_resolved
+             |> Treatment.changeset(%{status: "closed"})
+             |> Repo.update()
+
+    assert stale_resolved.status == "resolved"
+    assert persisted_closed.status == "closed"
+    assert {:error, :invalid_status} = Treatments.reopen(stale_resolved, owner)
+    assert Repo.get!(Treatment, treatment.id).status == "closed"
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+  end
+
+  test "reopen rolls back when the audit event cannot be persisted", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_508, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{} = changeset} = Treatments.reopen(resolved, owner)
+    assert "forced audit failure" in errors_on(changeset).event_type
+
+    assert %{
+             status: "resolved",
+             assigned_agent_id: assigned_agent_id,
+             assigned_at: assigned_at,
+             resolved_by_id: resolved_by_id,
+             resolved_at: resolved_at
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert assigned_agent_id == resolved.assigned_agent_id
+    assert assigned_at == resolved.assigned_at
+    assert resolved_by_id == resolved.resolved_by_id
+    assert resolved_at == resolved.resolved_at
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 0
+  end
+
+  test "concurrent reopen allows only the first transition", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_509, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    tasks =
+      for _ <- 1..2 do
+        task =
+          Task.async(fn ->
+            receive do
+              :reopen -> Treatments.reopen(resolved, owner)
+            end
+          end)
+
+        Sandbox.allow(Repo, self(), task.pid)
+        task
+      end
+
+    Enum.each(tasks, &send(&1.pid, :reopen))
+
+    outcomes =
+      tasks
+      |> Enum.map(&Task.await(&1, 5_000))
+      |> Enum.map(fn
+        {:ok, _treatment, :reopened} -> :reopened
+        {:error, :invalid_status} -> :invalid_status
+      end)
+      |> Enum.sort()
+
+    assert [:invalid_status, :reopened] = outcomes
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+    assert audit_event_count(treatment, owner, "treatment_reopened") == 1
+  end
+
+  test "reopening a treatment that no longer exists returns not found", %{user: user} do
+    missing_treatment = %Treatment{id: Ecto.UUID.generate()}
+
+    assert {:error, :not_found} = Treatments.reopen(missing_treatment, user)
+  end
+
+  test "room resolution reports an effective transition explicitly", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_497, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:ok, resolved, :resolved} = Treatments.resolve_for_room(room.id, agent)
+    assert resolved.id == assigned.id
+    assert resolved.status == "resolved"
+
+    assert {:error, :invalid_status} = Treatments.resolve_for_room(room.id, agent)
   end
 
   test "unauthorized user cannot resolve a treatment", %{user: user} do
@@ -254,6 +488,35 @@ defmodule Chat.TreatmentsTest do
              %{event_type: "treatment_created"}
            ] =
              Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "room assignment rolls back when the audit event cannot be persisted", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_500, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{} = changeset} =
+             Treatments.assign_agent_for_room(room.id, agent)
+
+    assert "forced audit failure" in errors_on(changeset).event_type
+
+    assert %{status: "open", assigned_agent_id: nil, assigned_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_assigned") == 0
   end
 
   test "cannot assign a treatment outside the open state", %{user: user} do
@@ -488,4 +751,7 @@ defmodule Chat.TreatmentsTest do
     |> Treatments.list_audit_events(user.id)
     |> Enum.count(&(&1.event_type == event_type))
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:chat, key)
+  defp restore_env(key, value), do: Application.put_env(:chat, key, value)
 end
