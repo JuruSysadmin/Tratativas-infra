@@ -4,6 +4,7 @@ defmodule Chat.Accounts.User do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
+  @roles ~w(commercial logistics_agent)
 
   @moduledoc """
   Schema de usuario do chat.
@@ -19,6 +20,7 @@ defmodule Chat.Accounts.User do
     field :username, :string
     field :password_hash, :string
     field :status, :string, default: "offline"
+    field :role, :string, default: "commercial"
     field :matricula, :string
     field :codusur, :string
     field :filial, :string
@@ -40,6 +42,7 @@ defmodule Chat.Accounts.User do
     |> cast(attrs, [
       :email,
       :username,
+      :role,
       :matricula,
       :codusur,
       :filial,
@@ -47,6 +50,8 @@ defmodule Chat.Accounts.User do
       :auth_subject
     ])
     |> validate_required([:email, :username])
+    |> validate_inclusion(:role, @roles)
+    |> check_constraint(:role, name: :users_role_check)
     |> unique_constraint(:email)
     |> unique_constraint(:username)
     |> unique_constraint(:matricula)

@@ -76,7 +76,8 @@ const MessageOutbox = {
     try {
       const messages = JSON.parse(window.localStorage.getItem(this.storageKey) || "[]")
       return Array.isArray(messages) ? messages : []
-    } catch (_error) {
+    } catch (error) {
+      console.warn("Unable to read pending messages from local storage", error)
       return []
     }
   },

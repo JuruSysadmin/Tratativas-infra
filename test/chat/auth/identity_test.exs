@@ -20,6 +20,54 @@ defmodule Chat.Auth.IdentityTest do
     assert user.matricula == "123"
     assert user.auth_provider == "external"
     assert user.auth_subject == "alice"
+    assert user.role == "commercial"
+  end
+
+  test "preserves a locally assigned role during external synchronization" do
+    {:ok, user} =
+      %User{}
+      |> User.auth_changeset(%{
+        email: "logistics@example.com",
+        username: "logistics-agent",
+        role: "logistics_agent",
+        auth_provider: "external",
+        auth_subject: "logistics-sub"
+      })
+      |> Repo.insert()
+
+    assert {:ok, synchronized_user} =
+             Identity.sync_user(
+               %{"sub" => "logistics-sub", "email" => "logistics@example.com"},
+               %{}
+             )
+
+    assert synchronized_user.id == user.id
+    assert synchronized_user.role == "logistics_agent"
+  end
+
+  test "rejects an unsupported user role" do
+    changeset =
+      User.auth_changeset(%User{}, %{
+        email: "invalid-role@example.com",
+        username: "invalid-role",
+        role: "admin"
+      })
+
+    assert "is invalid" in errors_on(changeset).role
+  end
+
+  test "maps the database role constraint to the changeset" do
+    changeset =
+      %User{}
+      |> Ecto.Changeset.change(
+        email: "database-role@example.com",
+        username: "database-role",
+        role: "admin"
+      )
+      |> Ecto.Changeset.check_constraint(:role, name: :users_role_check)
+
+    assert {:error, changeset} = Repo.insert(changeset)
+    assert "is invalid" in errors_on(changeset).role
   end
 
   test "uses the provider subject as the stable identity when the email changes" do

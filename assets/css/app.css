@@ -3003,7 +3003,7 @@ input:focus-visible,
   border-color: transparent;
 }
 
-.message-composer-hint {
+.chat-input .message-composer-hint {
   color: #525252;
 }
 
