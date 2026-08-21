@@ -133,15 +133,19 @@ defmodule Chat.Treatments do
   end
 
   defp record_event(treatment, actor_id, event_type, metadata \\ %{}) do
-    %AuditEvent{}
-    |> AuditEvent.changeset(%{
-      actor_id: actor_id,
-      event_type: event_type,
-      metadata: metadata,
-      treatment_id: treatment.id
-    })
-    |> Repo.insert()
+    changeset =
+      AuditEvent.changeset(%AuditEvent{}, %{
+        actor_id: actor_id,
+        event_type: event_type,
+        metadata: metadata,
+        treatment_id: treatment.id
+      })
+
+    audit_event_inserter().insert(changeset)
   end
+
+  defp audit_event_inserter,
+    do: Application.get_env(:chat, :treatment_audit_event_inserter, Repo)
 
   defp assign_locked(treatment_id, user) do
     treatment =
@@ -195,6 +199,14 @@ defmodule Chat.Treatments do
 
   defp assign_agent_result(treatment_id, user) do
     with :ok <- Authorization.authorize(user, "treatment.assign") do
+      run_assignment_transaction(treatment_id, user)
+    end
+  end
+
+  defp run_assignment_transaction(treatment_id, user) do
+    if Repo.in_transaction?() do
+      assign_locked_and_audit(treatment_id, user)
+    else
       Repo.transaction(fn -> assign_locked_and_audit(treatment_id, user) end)
       |> normalize_assignment_transaction_result()
     end
@@ -206,9 +218,7 @@ defmodule Chat.Treatments do
         {:error, :not_found}
 
       %Treatment{id: treatment_id} ->
-        with :ok <- Authorization.authorize(user, "treatment.assign") do
-          assign_locked_and_audit(treatment_id, user)
-        end
+        assign_agent_result(treatment_id, user)
     end
   end
 
