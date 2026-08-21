@@ -46,4 +46,8 @@ defmodule Chat.Treatments.Treatment do
     |> validate_required([:resolved_by_id, :resolved_at])
     |> foreign_key_constraint(:resolved_by_id)
   end
+
+  def reopen_changeset(treatment) do
+    change(treatment, %{status: "in_progress", resolved_by_id: nil, resolved_at: nil})
+  end
 end
