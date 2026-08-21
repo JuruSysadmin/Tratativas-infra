@@ -3,9 +3,10 @@ defmodule Chat.Treatments do
 
   import Ecto.Query
 
+  alias Chat.Accounts.User
   alias Chat.Repo
   alias Chat.Rooms
-  alias Chat.Treatments.{AuditEvent, Treatment}
+  alias Chat.Treatments.{AuditEvent, Authorization, Treatment}
 
   @doc "Abre ou reabre a tratativa única associada ao pedido."
   def open_for_order(order_id, user_id) when is_integer(order_id) do
@@ -34,6 +35,13 @@ defmodule Chat.Treatments do
       end)
     end)
     |> normalize_transaction_result()
+  end
+
+  def assign_agent(%Treatment{id: treatment_id}, %User{} = user) do
+    with :ok <- Authorization.authorize(user, "treatment.assign") do
+      Repo.transaction(fn -> assign_locked(treatment_id, user) end)
+      |> normalize_transaction_result()
+    end
   end
 
   def list_audit_events(treatment_id, user_id) do
@@ -114,6 +122,38 @@ defmodule Chat.Treatments do
     |> Repo.insert()
   end
 
+  defp assign_locked(treatment_id, user) do
+    treatment =
+      from(treatment in Treatment,
+        where: treatment.id == ^treatment_id,
+        lock: "FOR UPDATE"
+      )
+      |> Repo.one()
+
+    case treatment do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{assigned_agent_id: nil} = treatment ->
+        assign_locked_treatment(treatment, user)
+
+      %Treatment{assigned_agent_id: assigned_agent_id} when assigned_agent_id == user.id ->
+        {:ok, treatment}
+
+      %Treatment{} ->
+        {:error, :already_assigned}
+    end
+  end
+
+  defp assign_locked_treatment(treatment, user) do
+    treatment
+    |> Treatment.assignment_changeset(%{
+      assigned_agent_id: user.id,
+      assigned_at: DateTime.utc_now()
+    })
+    |> Repo.update()
+  end
+
   defp authorized_treatment(treatment_id, user_id) do
     from(treatment in Treatment,
       join: membership in "room_members",
@@ -124,6 +164,7 @@ defmodule Chat.Treatments do
     |> Repo.one()
   end
 
+  defp normalize_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_transaction_result({:ok, {:ok, result}}), do: {:ok, result}
   defp normalize_transaction_result({:ok, result}), do: {:ok, result}
   defp normalize_transaction_result({:error, reason}), do: {:error, reason}
