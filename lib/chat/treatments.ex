@@ -287,8 +287,7 @@ defmodule Chat.Treatments do
              %User{} = target_agent <- Repo.get(User, target_agent_id) do
           run_transfer_transaction(treatment_id, current_agent, target_agent)
         else
-          :error -> {:error, :invalid_target_agent}
-          nil -> {:error, :invalid_target_agent}
+          _ -> {:error, :invalid_target_agent}
         end
     end
   end
