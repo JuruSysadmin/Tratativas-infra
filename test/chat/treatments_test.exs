@@ -4,6 +4,7 @@ defmodule Chat.TreatmentsTest do
   alias Chat.Accounts.User
   alias Chat.Auth.Identity
   alias Chat.Repo
+  alias Chat.Rooms
   alias Chat.Treatments
   alias Chat.Treatments.Treatment
   alias Ecto.Adapters.SQL.Sandbox
@@ -96,6 +97,22 @@ defmodule Chat.TreatmentsTest do
              %{event_type: "treatment_created", actor_id: _owner_id}
            ] =
              Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "room resolution reports an effective transition explicitly", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_497, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    assert {:ok, resolved, :resolved} = Treatments.resolve_for_room(room.id, agent)
+    assert resolved.id == assigned.id
+    assert resolved.status == "resolved"
+
+    assert {:error, :invalid_status} = Treatments.resolve_for_room(room.id, agent)
   end
 
   test "unauthorized user cannot resolve a treatment", %{user: user} do
@@ -254,6 +271,35 @@ defmodule Chat.TreatmentsTest do
              %{event_type: "treatment_created"}
            ] =
              Treatments.list_audit_events(treatment.id, user.id)
+  end
+
+  test "room assignment rolls back when the audit event cannot be persisted", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_500, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{} = changeset} =
+             Treatments.assign_agent_for_room(room.id, agent)
+
+    assert "forced audit failure" in errors_on(changeset).event_type
+
+    assert %{status: "open", assigned_agent_id: nil, assigned_at: nil} =
+             Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_assigned") == 0
   end
 
   test "cannot assign a treatment outside the open state", %{user: user} do
@@ -488,4 +534,7 @@ defmodule Chat.TreatmentsTest do
     |> Treatments.list_audit_events(user.id)
     |> Enum.count(&(&1.event_type == event_type))
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:chat, key)
+  defp restore_env(key, value), do: Application.put_env(:chat, key, value)
 end

@@ -54,9 +54,9 @@ defmodule Chat.Treatments do
   end
 
   def resolve(%Treatment{id: treatment_id}, %User{} = user) do
-    with :ok <- Authorization.authorize(user, "treatment.resolve") do
-      Repo.transaction(fn -> resolve_locked(treatment_id, user) end)
-      |> normalize_transaction_result()
+    case resolve_result(treatment_id, user) do
+      {:ok, treatment, :resolved} -> {:ok, treatment}
+      error -> error
     end
   end
 
@@ -133,15 +133,19 @@ defmodule Chat.Treatments do
   end
 
   defp record_event(treatment, actor_id, event_type, metadata \\ %{}) do
-    %AuditEvent{}
-    |> AuditEvent.changeset(%{
-      actor_id: actor_id,
-      event_type: event_type,
-      metadata: metadata,
-      treatment_id: treatment.id
-    })
-    |> Repo.insert()
+    changeset =
+      AuditEvent.changeset(%AuditEvent{}, %{
+        actor_id: actor_id,
+        event_type: event_type,
+        metadata: metadata,
+        treatment_id: treatment.id
+      })
+
+    audit_event_inserter().insert(changeset)
   end
+
+  defp audit_event_inserter,
+    do: Application.get_env(:chat, :treatment_audit_event_inserter, Repo)
 
   defp assign_locked(treatment_id, user) do
     treatment =
@@ -195,6 +199,14 @@ defmodule Chat.Treatments do
 
   defp assign_agent_result(treatment_id, user) do
     with :ok <- Authorization.authorize(user, "treatment.assign") do
+      run_assignment_transaction(treatment_id, user)
+    end
+  end
+
+  defp run_assignment_transaction(treatment_id, user) do
+    if Repo.in_transaction?() do
+      assign_locked_and_audit(treatment_id, user)
+    else
       Repo.transaction(fn -> assign_locked_and_audit(treatment_id, user) end)
       |> normalize_assignment_transaction_result()
     end
@@ -206,16 +218,21 @@ defmodule Chat.Treatments do
         {:error, :not_found}
 
       %Treatment{id: treatment_id} ->
-        with :ok <- Authorization.authorize(user, "treatment.assign") do
-          assign_locked_and_audit(treatment_id, user)
-        end
+        assign_agent_result(treatment_id, user)
     end
   end
 
   defp resolve_room_treatment(room_id, user) do
     case get_by_room_id(room_id) do
       nil -> {:error, :not_found}
-      %Treatment{} = treatment -> resolve(treatment, user)
+      %Treatment{id: treatment_id} -> resolve_result(treatment_id, user)
+    end
+  end
+
+  defp resolve_result(treatment_id, user) do
+    with :ok <- Authorization.authorize(user, "treatment.resolve") do
+      Repo.transaction(fn -> resolve_locked(treatment_id, user) end)
+      |> normalize_resolution_transaction_result()
     end
   end
 
@@ -269,7 +286,7 @@ defmodule Chat.Treatments do
     case resolve_locked_treatment(treatment, user) do
       {:ok, resolved_treatment} ->
         case record_event(resolved_treatment, user.id, "treatment_resolved") do
-          {:ok, _event} -> {:ok, resolved_treatment}
+          {:ok, _event} -> {:ok, resolved_treatment, :resolved}
           {:error, reason} -> Repo.rollback(reason)
         end
 
@@ -298,6 +315,12 @@ defmodule Chat.Treatments do
 
   defp normalize_assignment_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
   defp normalize_assignment_transaction_result({:error, reason}), do: {:error, reason}
+
+  defp normalize_resolution_transaction_result({:ok, {:ok, treatment, result}}),
+    do: {:ok, treatment, result}
+
+  defp normalize_resolution_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
+  defp normalize_resolution_transaction_result({:error, reason}), do: {:error, reason}
 
   defp normalize_member_room_result({:ok, {:ok, treatment, result}}),
     do: {:ok, treatment, result}
