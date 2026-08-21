@@ -150,7 +150,17 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
            } = Repo.get!(Treatment, treatment.id)
 
     assert assigned_at == resolved.assigned_at
-    refute_push "treatment:reopened", _payload
+
+    assert_push "treatment:reopened", %{
+      treatment_id: ^treatment_id,
+      status: "in_progress",
+      assigned_agent_id: ^assigned_agent_id,
+      assigned_at: ^assigned_at
+    }
+
+    retry_ref = push(socket, "treatment:reopen", %{})
+    assert_reply retry_ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:reopened", _duplicate
 
     assert reopened_audit_count(treatment, commercial) == 1
   end
@@ -174,7 +184,17 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     ref = push(socket, "treatment:reopen", %{})
 
     treatment_id = treatment.id
+    agent_id = agent.id
     assert_reply ref, :ok, %{treatment_id: ^treatment_id, status: "in_progress"}
+
+    assert_push "treatment:reopened", %{
+      treatment_id: ^treatment_id,
+      status: "in_progress",
+      assigned_agent_id: ^agent_id,
+      assigned_at: assigned_at
+    }
+
+    assert assigned_at == assigned.assigned_at
     assert reopened_audit_count(treatment, owner) == 1
   end
 
@@ -293,7 +313,108 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
              Repo.get!(Treatment, treatment.id)
 
     assert Repo.get!(Treatment, treatment.id).assigned_at == resolved.assigned_at
+
+    treatment_id = treatment.id
+    agent_id = agent.id
+    assigned_at = resolved.assigned_at
+
+    assert_push "treatment:reopened", %{
+      treatment_id: ^treatment_id,
+      status: "in_progress",
+      assigned_agent_id: ^agent_id,
+      assigned_at: ^assigned_at
+    }
+
     assert reopened_audit_count(treatment, commercial) == 1
+  end
+
+  test "stale caller state cannot publish an incorrect reopening event" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-stale-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_021, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, stale_resolved} = Treatments.resolve(assigned, agent)
+
+    assert {:ok, persisted_in_progress} =
+             stale_resolved
+             |> Treatment.changeset(%{
+               status: "in_progress",
+               resolved_by_id: nil,
+               resolved_at: nil
+             })
+             |> Repo.update()
+
+    assert stale_resolved.status == "resolved"
+    assert persisted_in_progress.status == "in_progress"
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopen-stale-owner", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:reopen", %{})
+
+    assert_reply ref, :error, %{reason: "invalid_status"}
+    refute_push "treatment:reopened", _payload
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+    assert reopened_audit_count(treatment, owner) == 0
+  end
+
+  test "concurrent channel reopens publish exactly one event" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-reopen-race-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_022, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, _resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, _reply, first_socket} =
+      UserSocket
+      |> socket("channel-reopen-race-1", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    {:ok, _reply, second_socket} =
+      UserSocket
+      |> socket("channel-reopen-race-2", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    first_ref = push(first_socket, "treatment:reopen", %{})
+    second_ref = push(second_socket, "treatment:reopen", %{})
+
+    assert_reply first_ref, first_status, first_payload
+    assert_reply second_ref, second_status, second_payload
+
+    assert [:error, :ok] = Enum.sort([first_status, second_status])
+
+    assert Enum.any?([first_payload, second_payload], fn
+             %{reason: "invalid_status"} -> true
+             _payload -> false
+           end)
+
+    assert_push "treatment:reopened", %{
+      treatment_id: treatment_id,
+      status: "in_progress",
+      assigned_agent_id: assigned_agent_id,
+      assigned_at: assigned_at
+    }
+
+    assert_push "treatment:reopened", %{
+      treatment_id: ^treatment_id,
+      status: "in_progress",
+      assigned_agent_id: ^assigned_agent_id,
+      assigned_at: ^assigned_at
+    }
+
+    assert treatment_id == treatment.id
+    assert assigned_agent_id == agent.id
+    assert assigned_at == assigned.assigned_at
+    refute_push "treatment:reopened", _duplicate
+    assert reopened_audit_count(treatment, owner) == 1
   end
 
   test "concurrent channel resolutions publish exactly one event" do
