@@ -6,10 +6,8 @@ defmodule ChatWeb.RoomChannel do
   alias Chat.Accounts
   alias Chat.Messages
   alias Chat.Messages.Attachments
-  alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Treatments
-  alias Chat.Treatments.Treatment
   alias ChatWeb.Presence
 
   @impl true
@@ -157,22 +155,27 @@ defmodule ChatWeb.RoomChannel do
   end
 
   def handle_in("treatment:assign_to_me", _params, socket) do
-    case Repo.get_by(Treatment, room_id: socket.assigns.room_id) do
-      nil ->
-        {:reply, {:error, %{reason: "not_found"}}, socket}
+    result =
+      Treatments.assign_agent_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
 
-      treatment ->
-        case Treatments.assign_agent(treatment, socket.assigns.current_user) do
-          {:ok, assigned_treatment} ->
-            payload = treatment_assignment_payload(assigned_treatment)
+    case result do
+      {:ok, assigned_treatment, :assigned} ->
+        payload = treatment_assignment_payload(assigned_treatment)
+        broadcast!(socket, "treatment:agent_assigned", payload)
+        {:reply, {:ok, payload}, socket}
 
-            maybe_broadcast_treatment_assignment(socket, treatment, payload)
+      {:ok, assigned_treatment, :idempotent} ->
+        {:reply, {:ok, treatment_assignment_payload(assigned_treatment)}, socket}
 
-            {:reply, {:ok, payload}, socket}
+      {:error, reason}
+      when reason in [:forbidden, :already_assigned, :not_found, :invalid_status] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
 
-          {:error, reason} when reason in [:forbidden, :already_assigned, :not_found] ->
-            {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
-        end
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_assignment_failed"}}, socket}
     end
   end
 
@@ -225,14 +228,4 @@ defmodule ChatWeb.RoomChannel do
       assigned_at: treatment.assigned_at
     }
   end
-
-  defp maybe_broadcast_treatment_assignment(
-         socket,
-         %Treatment{assigned_agent_id: nil},
-         payload
-       ) do
-    broadcast!(socket, "treatment:agent_assigned", payload)
-  end
-
-  defp maybe_broadcast_treatment_assignment(_socket, %Treatment{}, _payload), do: :ok
 end

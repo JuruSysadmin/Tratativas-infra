@@ -12,10 +12,12 @@ defmodule Chat.Treatments.Treatment do
     field :order_id, :integer
     field :status, :string, default: "open"
     field :assigned_at, :utc_datetime_usec
+    field :resolved_at, :utc_datetime_usec
 
     belongs_to :room, Chat.Rooms.Room
     belongs_to :opened_by, Chat.Accounts.User
     belongs_to :assigned_agent, Chat.Accounts.User
+    belongs_to :resolved_by, Chat.Accounts.User
     has_many :audit_events, Chat.Treatments.AuditEvent
 
     timestamps(type: :utc_datetime_usec)
@@ -25,15 +27,23 @@ defmodule Chat.Treatments.Treatment do
     treatment
     |> cast(attrs, [:order_id, :status, :room_id, :opened_by_id])
     |> validate_required([:order_id, :status, :room_id, :opened_by_id])
-    |> validate_inclusion(:status, ["open", "closed"])
+    |> validate_inclusion(:status, ["open", "in_progress", "resolved", "closed"])
     |> unique_constraint(:order_id)
     |> unique_constraint(:room_id)
   end
 
   def assignment_changeset(treatment, attrs) do
     treatment
-    |> cast(attrs, [:assigned_agent_id, :assigned_at])
+    |> cast(attrs, [:assigned_agent_id, :assigned_at, :status])
     |> validate_required([:assigned_agent_id, :assigned_at])
+    |> validate_inclusion(:status, ["open", "in_progress", "resolved", "closed"])
     |> foreign_key_constraint(:assigned_agent_id)
+  end
+
+  def resolution_changeset(treatment, resolved_by_id, resolved_at) do
+    treatment
+    |> change(%{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at})
+    |> validate_required([:resolved_by_id, :resolved_at])
+    |> foreign_key_constraint(:resolved_by_id)
   end
 end
