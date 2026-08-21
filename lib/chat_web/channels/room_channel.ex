@@ -210,7 +210,9 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, reopened_treatment, :reopened} ->
-        {:reply, {:ok, treatment_reopen_payload(reopened_treatment)}, socket}
+        payload = treatment_reopen_payload(reopened_treatment)
+        broadcast!(socket, "treatment:reopened", payload)
+        {:reply, {:ok, payload}, socket}
 
       {:error, reason} when reason in [:forbidden, :not_found, :invalid_status] ->
         {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
@@ -283,7 +285,8 @@ defmodule ChatWeb.RoomChannel do
     %{
       treatment_id: treatment.id,
       status: treatment.status,
-      assigned_agent_id: treatment.assigned_agent_id
+      assigned_agent_id: treatment.assigned_agent_id,
+      assigned_at: treatment.assigned_at
     }
   end
 end
