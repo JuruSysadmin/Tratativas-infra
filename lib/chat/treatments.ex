@@ -44,13 +44,12 @@ defmodule Chat.Treatments do
     end
   end
 
+  def get_by_room_id(room_id) do
+    Repo.get_by(Treatment, room_id: room_id)
+  end
+
   def assign_agent_for_room(room_id, %User{} = user) do
-    Rooms.with_member_room(user.id, room_id, fn _room ->
-      case Repo.get_by(Treatment, room_id: room_id) do
-        nil -> {:error, :not_found}
-        %Treatment{id: treatment_id} -> assign_agent_result(treatment_id, user)
-      end
-    end)
+    Rooms.with_member_room(user.id, room_id, fn _room -> assign_room_treatment(room_id, user) end)
     |> normalize_member_room_result()
   end
 
@@ -193,6 +192,18 @@ defmodule Chat.Treatments do
     with :ok <- Authorization.authorize(user, "treatment.assign") do
       Repo.transaction(fn -> assign_locked_and_audit(treatment_id, user) end)
       |> normalize_assignment_transaction_result()
+    end
+  end
+
+  defp assign_room_treatment(room_id, user) do
+    case get_by_room_id(room_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{id: treatment_id} ->
+        with :ok <- Authorization.authorize(user, "treatment.assign") do
+          assign_locked_and_audit(treatment_id, user)
+        end
     end
   end
 

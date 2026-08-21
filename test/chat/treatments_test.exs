@@ -35,6 +35,14 @@ defmodule Chat.TreatmentsTest do
     assert treatment.assigned_at == nil
   end
 
+  test "gets a treatment by room id", %{user: user} do
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_499, user.id)
+
+    assert %Treatment{id: treatment_id} = Treatments.get_by_room_id(treatment.room_id)
+    assert treatment_id == treatment.id
+    assert Treatments.get_by_room_id(Ecto.UUID.generate()) == nil
+  end
+
   test "logistics agent can assign an available treatment", %{user: user} do
     agent = logistics_agent_fixture()
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_480, user.id)
@@ -99,6 +107,8 @@ defmodule Chat.TreatmentsTest do
 
     assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
              Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_resolved") == 0
   end
 
   test "authorized user who is not assigned cannot resolve a treatment", %{user: user} do
@@ -111,6 +121,8 @@ defmodule Chat.TreatmentsTest do
 
     assert %{status: "in_progress", resolved_by_id: nil, resolved_at: nil} =
              Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_resolved") == 0
   end
 
   test "open treatment cannot be resolved", %{user: user} do
@@ -121,6 +133,8 @@ defmodule Chat.TreatmentsTest do
 
     assert %{status: "open", resolved_by_id: nil, resolved_at: nil} =
              Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_resolved") == 0
   end
 
   test "resolved treatment cannot be resolved again", %{user: user} do
@@ -136,6 +150,7 @@ defmodule Chat.TreatmentsTest do
              Repo.get!(Treatment, treatment.id)
 
     assert resolved_at == resolved.resolved_at
+    assert audit_event_count(treatment, user, "treatment_resolved") == 1
   end
 
   test "closed treatment cannot be resolved", %{user: user} do
@@ -193,6 +208,7 @@ defmodule Chat.TreatmentsTest do
     assert [:invalid_status, :ok] = outcomes
     agent_id = agent.id
     assert %{status: "resolved", resolved_by_id: ^agent_id} = Repo.get!(Treatment, treatment.id)
+    assert audit_event_count(treatment, user, "treatment_resolved") == 1
   end
 
   test "commercial user cannot assign a treatment", %{user: user} do
@@ -200,6 +216,7 @@ defmodule Chat.TreatmentsTest do
 
     assert {:error, :forbidden} = Treatments.assign_agent(treatment, user)
     assert %{assigned_agent_id: nil, assigned_at: nil} = Repo.get!(Treatment, treatment.id)
+    assert audit_event_count(treatment, user, "treatment_assigned") == 0
   end
 
   test "another agent cannot take an assigned treatment", %{user: user} do
@@ -216,6 +233,7 @@ defmodule Chat.TreatmentsTest do
              Repo.get!(Treatment, treatment.id)
 
     assert assigned_at == assigned.assigned_at
+    assert audit_event_count(treatment, user, "treatment_assigned") == 1
   end
 
   test "assigning the same treatment twice by the same agent is idempotent", %{user: user} do
@@ -247,6 +265,8 @@ defmodule Chat.TreatmentsTest do
 
     assert %{status: "closed", assigned_agent_id: nil, assigned_at: nil} =
              Repo.get!(Treatment, treatment.id)
+
+    assert audit_event_count(treatment, user, "treatment_assigned") == 0
   end
 
   test "resolved and closed treatments reject assignment", %{user: user} do
@@ -327,6 +347,7 @@ defmodule Chat.TreatmentsTest do
     assert [:already_assigned, :ok] = statuses
     assert %{assigned_agent_id: assigned_agent_id} = Repo.get!(Treatment, treatment.id)
     assert assigned_agent_id in [first_agent.id, second_agent.id]
+    assert audit_event_count(treatment, user, "treatment_assigned") == 1
   end
 
   test "assigning a treatment that no longer exists returns not found" do
@@ -460,5 +481,11 @@ defmodule Chat.TreatmentsTest do
       role: "logistics_agent"
     })
     |> Repo.insert!()
+  end
+
+  defp audit_event_count(treatment, user, event_type) do
+    treatment.id
+    |> Treatments.list_audit_events(user.id)
+    |> Enum.count(&(&1.event_type == event_type))
   end
 end
