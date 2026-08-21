@@ -66,6 +66,15 @@ defmodule Chat.Treatments do
     end
   end
 
+  def transfer_agent_for_room(room_id, %User{} = current_agent, target_agent_id) do
+    with :ok <- Authorization.authorize(current_agent, "treatment.transfer") do
+      Rooms.with_member_room(current_agent.id, room_id, fn _room ->
+        transfer_room_treatment(room_id, current_agent, target_agent_id)
+      end)
+      |> normalize_transfer_member_room_result()
+    end
+  end
+
   def get_by_room_id(room_id) do
     Repo.get_by(Treatment, room_id: room_id)
   end
@@ -265,6 +274,22 @@ defmodule Chat.Treatments do
         transfer_locked_and_audit(treatment_id, current_agent, target_agent)
       end)
       |> normalize_transfer_transaction_result()
+    end
+  end
+
+  defp transfer_room_treatment(room_id, current_agent, target_agent_id) do
+    case get_by_room_id(room_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{id: treatment_id} ->
+        with {:ok, target_agent_id} <- Ecto.UUID.cast(target_agent_id),
+             %User{} = target_agent <- Repo.get(User, target_agent_id) do
+          run_transfer_transaction(treatment_id, current_agent, target_agent)
+        else
+          :error -> {:error, :invalid_target_agent}
+          nil -> {:error, :invalid_target_agent}
+        end
     end
   end
 
