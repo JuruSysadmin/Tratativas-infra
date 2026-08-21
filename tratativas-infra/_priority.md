@@ -17,3 +17,4 @@ Stack-rank order. Top is the highest priority. Edit by hand or via `am rank` / `
 - [Permitir que agente assuma Tratativa](Permitir-que-agente-assuma-Tratativa.md)
 - [Adicionar agente responsável à Tratativa](Adicionar-agente-responsavel-a-Tratativa.md)
 - [Definir matriz de permissoes da Tratativa](Definir-matriz-de-permissoes-da-Tratativa.md)
+- [Permitir transferir Tratativa diretamente para outro agente](Permitir-transferir-Tratativa-diretamente-para-outro-agente.md)

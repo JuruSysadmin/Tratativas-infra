@@ -44,6 +44,17 @@ defmodule Chat.Treatments.Treatment do
     change(treatment, %{status: "open", assigned_agent_id: nil, assigned_at: nil})
   end
 
+  def transfer_changeset(treatment, target_agent_id, assigned_at) do
+    treatment
+    |> change(%{
+      status: "in_progress",
+      assigned_agent_id: target_agent_id,
+      assigned_at: assigned_at
+    })
+    |> validate_required([:assigned_agent_id, :assigned_at])
+    |> foreign_key_constraint(:assigned_agent_id)
+  end
+
   def resolution_changeset(treatment, resolved_by_id, resolved_at) do
     treatment
     |> change(%{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at})

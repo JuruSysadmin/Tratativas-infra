@@ -13,7 +13,8 @@ defmodule Chat.Treatments.Authorization do
     "treatment.assign",
     "treatment.resolve",
     "treatment.reopen",
-    "treatment.unassign"
+    "treatment.unassign",
+    "treatment.transfer"
   ]
 
   @role_permissions %{
