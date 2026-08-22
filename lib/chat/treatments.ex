@@ -158,6 +158,13 @@ defmodule Chat.Treatments do
     "TRAT-" <> String.pad_leading(Integer.to_string(protocol_number), 6, "0")
   end
 
+  @doc """
+  Preloads associations required for public and realtime presentation of a Treatment.
+  """
+  def preload_for_presentation(%Treatment{} = treatment) do
+    Repo.preload(treatment, :assigned_agent)
+  end
+
   defp open_or_reopen(room, order_id, user_id) do
     case Repo.get_by(Treatment, order_id: order_id) do
       nil -> create_treatment(room.id, order_id, user_id)

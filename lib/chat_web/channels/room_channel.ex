@@ -211,7 +211,8 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, resolved_treatment, :resolved} ->
-        payload = treatment_resolution_payload(resolved_treatment)
+        treatment = Treatments.preload_for_presentation(resolved_treatment)
+        payload = treatment_lifecycle_payload(treatment)
         broadcast!(socket, "treatment:resolved", payload)
         {:reply, {:ok, payload}, socket}
 
@@ -233,7 +234,8 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, reopened_treatment, :reopened} ->
-        payload = treatment_assignment_state_payload(reopened_treatment)
+        treatment = Treatments.preload_for_presentation(reopened_treatment)
+        payload = treatment_lifecycle_payload(treatment)
         broadcast!(socket, "treatment:reopened", payload)
         {:reply, {:ok, payload}, socket}
 
@@ -326,23 +328,22 @@ defmodule ChatWeb.RoomChannel do
 
     %{
       treatment_id: treatment.id,
+      status: treatment.status,
       assigned_agent_id: treatment.assigned_agent_id,
       assigned_at: treatment.assigned_at,
       assigned_agent_username: assigned_agent_username(treatment)
     }
   end
 
-  defp treatment_resolution_payload(treatment) do
-    treatment = Repo.preload(treatment, :assigned_agent)
-
+  defp treatment_lifecycle_payload(treatment) do
     %{
       treatment_id: treatment.id,
       status: treatment.status,
-      resolved_by_id: treatment.resolved_by_id,
-      resolved_at: treatment.resolved_at,
       assigned_agent_id: treatment.assigned_agent_id,
       assigned_agent_username: assigned_agent_username(treatment),
-      assigned_at: treatment.assigned_at
+      assigned_at: treatment.assigned_at,
+      resolved_by_id: treatment.resolved_by_id,
+      resolved_at: treatment.resolved_at
     }
   end
 
@@ -364,11 +365,11 @@ defmodule ChatWeb.RoomChannel do
         %{room_id: room_id}
 
       treatment ->
-        Map.merge(%{room_id: room_id}, treatment_assignment_state_payload(treatment))
+        treatment
+        |> treatment_lifecycle_payload()
         |> Map.merge(%{
           id: treatment.id,
-          resolved_by_id: treatment.resolved_by_id,
-          resolved_at: treatment.resolved_at
+          room_id: room_id
         })
     end
   end

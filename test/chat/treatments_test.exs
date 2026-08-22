@@ -1292,6 +1292,30 @@ defmodule Chat.TreatmentsTest do
     assert Repo.get!(Chat.Treatments.Treatment, closed_treatment.id).status == "open"
   end
 
+  test "preload_for_presentation loads assigned agent for presentation", %{user: owner} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_043_999, owner.id)
+
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    raw_treatment = Repo.get!(Treatment, assigned.id)
+
+    assert %Ecto.Association.NotLoaded{} = raw_treatment.assigned_agent
+
+    prepared = Treatments.preload_for_presentation(raw_treatment)
+
+    assert %User{id: agent_id, username: agent_username} = prepared.assigned_agent
+    assert agent_id == agent.id
+    assert agent_username == agent.username
+
+    invalid_input = Enum.find([], &(&1 != nil))
+
+    assert_raise FunctionClauseError, fn ->
+      Treatments.preload_for_presentation(invalid_input)
+    end
+  end
+
   defp logistics_agent_fixture do
     %User{}
     |> User.auth_changeset(%{

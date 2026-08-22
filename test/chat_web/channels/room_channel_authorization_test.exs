@@ -155,35 +155,37 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     ref = push(socket, "treatment:resolve", %{})
 
-    assert_reply ref, :ok, %{
-      treatment_id: treatment_id,
-      status: "resolved",
-      resolved_by_id: resolved_by_id,
-      resolved_at: resolved_at
-    }
+    assert_reply ref, :ok, reply_payload
+    assert_push "treatment:resolved", broadcast_payload
 
-    assert treatment_id == treatment.id
-    assert resolved_by_id == agent.id
-    assert resolved_at != nil
+    assert reply_payload == broadcast_payload
 
     agent_id = agent.id
+    agent_username = agent.username
+    assigned_at = assigned.assigned_at
+    treatment_id = treatment.id
+
+    assert %{
+             treatment_id: ^treatment_id,
+             status: "resolved",
+             assigned_agent_id: ^agent_id,
+             assigned_agent_username: ^agent_username,
+             assigned_at: ^assigned_at,
+             resolved_by_id: ^agent_id,
+             resolved_at: resolved_at
+           } = reply_payload
+
+    assert resolved_at != nil
 
     assert %{
              status: "resolved",
              resolved_by_id: ^agent_id,
              resolved_at: ^resolved_at,
              assigned_agent_id: ^agent_id,
-             assigned_at: assigned_at
+             assigned_at: persisted_assigned_at
            } = Repo.get!(Treatment, treatment.id)
 
-    assert assigned_at == assigned.assigned_at
-
-    assert_push "treatment:resolved", %{
-      treatment_id: ^treatment_id,
-      status: "resolved",
-      resolved_by_id: ^resolved_by_id,
-      resolved_at: ^resolved_at
-    }
+    assert persisted_assigned_at == assigned_at
 
     retry_ref = push(socket, "treatment:resolve", %{})
     assert_reply retry_ref, :error, %{reason: "invalid_status"}
@@ -512,31 +514,35 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     ref = push(socket, "treatment:reopen", %{})
 
-    assert_reply ref, :ok, %{
-      treatment_id: treatment_id,
-      status: "in_progress",
-      assigned_agent_id: assigned_agent_id
-    }
+    assert_reply ref, :ok, reply_payload
+    assert_push "treatment:reopened", broadcast_payload
 
-    assert treatment_id == treatment.id
-    assert assigned_agent_id == agent.id
+    assert reply_payload == broadcast_payload
+
+    treatment_id = treatment.id
+    agent_id = agent.id
+    agent_username = agent.username
+    assigned_at = resolved.assigned_at
+
+    assert %{
+             treatment_id: ^treatment_id,
+             status: "in_progress",
+             assigned_agent_id: ^agent_id,
+             assigned_agent_username: ^agent_username,
+             assigned_at: ^assigned_at,
+             resolved_by_id: nil,
+             resolved_at: nil
+           } = reply_payload
 
     assert %{
              status: "in_progress",
-             assigned_agent_id: ^assigned_agent_id,
-             assigned_at: assigned_at,
+             assigned_agent_id: ^agent_id,
+             assigned_at: persisted_assigned_at,
              resolved_by_id: nil,
              resolved_at: nil
            } = Repo.get!(Treatment, treatment.id)
 
-    assert assigned_at == resolved.assigned_at
-
-    assert_push "treatment:reopened", %{
-      treatment_id: ^treatment_id,
-      status: "in_progress",
-      assigned_agent_id: ^assigned_agent_id,
-      assigned_at: ^assigned_at
-    }
+    assert persisted_assigned_at == assigned_at
 
     retry_ref = push(socket, "treatment:reopen", %{})
     assert_reply retry_ref, :error, %{reason: "invalid_status"}
@@ -554,7 +560,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
     assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
-    assert {:ok, _resolved} = Treatments.resolve(assigned, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
 
     {:ok, _reply, socket} =
       UserSocket
@@ -563,18 +569,35 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     ref = push(socket, "treatment:reopen", %{})
 
+    assert_reply ref, :ok, reply_payload
+    assert_push "treatment:reopened", broadcast_payload
+
+    assert reply_payload == broadcast_payload
+
     treatment_id = treatment.id
     agent_id = agent.id
-    assert_reply ref, :ok, %{treatment_id: ^treatment_id, status: "in_progress"}
+    agent_username = agent.username
+    assigned_at = resolved.assigned_at
 
-    assert_push "treatment:reopened", %{
-      treatment_id: ^treatment_id,
-      status: "in_progress",
-      assigned_agent_id: ^agent_id,
-      assigned_at: assigned_at
-    }
+    assert %{
+             treatment_id: ^treatment_id,
+             status: "in_progress",
+             assigned_agent_id: ^agent_id,
+             assigned_agent_username: ^agent_username,
+             assigned_at: ^assigned_at,
+             resolved_by_id: nil,
+             resolved_at: nil
+           } = reply_payload
 
-    assert assigned_at == assigned.assigned_at
+    assert %{
+             status: "in_progress",
+             assigned_agent_id: ^agent_id,
+             assigned_at: persisted_assigned_at,
+             resolved_by_id: nil,
+             resolved_at: nil
+           } = Repo.get!(Treatment, treatment.id)
+
+    assert persisted_assigned_at == assigned_at
     assert reopened_audit_count(treatment, owner) == 1
   end
 
@@ -1438,6 +1461,61 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     assert user_id == owner.id
     refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
+  end
+
+  test "channel join returns stable treatment snapshot for resolved and reopened treatments" do
+    {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-join-snapshot-commercial"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_025, commercial.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+    {:ok, resolved_snapshot, _socket} =
+      UserSocket
+      |> socket("channel-join-snapshot-resolved", %{current_user: commercial})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    treatment_id = treatment.id
+    room_id = room.id
+    agent_id = agent.id
+    agent_username = agent.username
+    assigned_at = assigned.assigned_at
+    resolved_at = resolved.resolved_at
+
+    assert %{
+             room_id: ^room_id,
+             id: ^treatment_id,
+             treatment_id: ^treatment_id,
+             status: "resolved",
+             assigned_agent_id: ^agent_id,
+             assigned_agent_username: ^agent_username,
+             assigned_at: ^assigned_at,
+             resolved_by_id: ^agent_id,
+             resolved_at: ^resolved_at
+           } = resolved_snapshot
+
+    assert {:ok, _reopened, :reopened} = Treatments.reopen(resolved, commercial)
+
+    {:ok, reopened_snapshot, _socket} =
+      UserSocket
+      |> socket("channel-join-snapshot-reopened", %{current_user: commercial})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    assert %{
+             room_id: ^room_id,
+             id: ^treatment_id,
+             treatment_id: ^treatment_id,
+             status: "in_progress",
+             assigned_agent_id: ^agent_id,
+             assigned_agent_username: ^agent_username,
+             assigned_at: ^assigned_at,
+             resolved_by_id: nil,
+             resolved_at: nil
+           } = reopened_snapshot
   end
 
   defp logistics_agent_fixture do
