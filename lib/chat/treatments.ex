@@ -53,6 +53,15 @@ defmodule Chat.Treatments do
     end
   end
 
+  def unassign_for_room(room_id, %User{} = user) do
+    with :ok <- Authorization.authorize(user, "treatment.unassign") do
+      Rooms.with_member_room(user.id, room_id, fn _room ->
+        unassign_room_treatment(room_id, user)
+      end)
+      |> normalize_unassign_member_room_result()
+    end
+  end
+
   def transfer_agent(
         %Treatment{id: treatment_id, room_id: room_id},
         %User{} = current_agent,
@@ -76,7 +85,12 @@ defmodule Chat.Treatments do
   end
 
   def get_by_room_id(room_id) do
-    Repo.get_by(Treatment, room_id: room_id)
+    Treatment
+    |> Repo.get_by(room_id: room_id)
+    |> case do
+      nil -> nil
+      treatment -> Repo.preload(treatment, :assigned_agent)
+    end
   end
 
   def assign_agent_for_room(room_id, %User{} = user) do
@@ -300,6 +314,16 @@ defmodule Chat.Treatments do
 
       %Treatment{id: treatment_id} ->
         assign_agent_result(treatment_id, user)
+    end
+  end
+
+  defp unassign_room_treatment(room_id, user) do
+    case get_by_room_id(room_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Treatment{id: treatment_id} ->
+        run_unassign_transaction(treatment_id, user)
     end
   end
 

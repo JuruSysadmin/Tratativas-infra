@@ -60,6 +60,84 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert persisted_assigned_at == assigned_at
   end
 
+  test "assigned logistics agent can unassign the room treatment through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-unassign-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_017, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-unassign-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:unassign", %{})
+
+    assert_reply ref, :ok, %{
+      treatment_id: treatment_id,
+      status: "open",
+      assigned_agent_id: nil,
+      assigned_at: nil
+    }
+
+    assert treatment_id == treatment.id
+    assert Repo.get!(Treatment, treatment.id).status == "open"
+    assert assigned.assigned_agent_id == agent.id
+
+    assert_push "treatment:unassigned", %{
+      treatment_id: ^treatment_id,
+      status: "open",
+      assigned_agent_id: nil,
+      assigned_at: nil
+    }
+  end
+
+  test "commercial member receives forbidden when unassigning through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-unassign-commercial"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_018, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-unassign-commercial", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:unassign", %{})
+
+    assert_reply ref, :error, %{reason: "forbidden"}
+    refute_push "treatment:unassigned", _payload
+  end
+
+  test "unassign ignores client ownership fields and uses the authenticated agent" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-unassign-payload"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_019, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-unassign-payload", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(socket, "treatment:unassign", %{"assigned_agent_id" => Ecto.UUID.generate()})
+
+    assert_reply ref, :ok, %{status: "open", assigned_agent_id: nil, assigned_at: nil}
+    assert_push "treatment:unassigned", _payload
+  end
+
   test "assigned logistics agent can resolve the room treatment through the channel" do
     {:ok, owner} = Identity.sync_user(%{"sub" => "channel-resolution-owner"}, %{})
     agent = logistics_agent_fixture()

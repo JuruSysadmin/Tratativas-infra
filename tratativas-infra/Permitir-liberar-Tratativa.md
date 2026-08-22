@@ -4,10 +4,10 @@ type: feature
 estimate: 3
 tags: [backend, elixir, treatments, authorization, audit, tdd]
 status: delivered
-modified: "2026-08-21T17:36:30Z"
+modified: "2026-08-22T03:14:43Z"
 started: "2026-08-21T17:30:24Z"
-finished: "2026-08-21T17:36:30Z"
-delivered: "2026-08-21T17:36:30Z"
+finished: "2026-08-22T03:14:43Z"
+delivered: "2026-08-22T03:14:43Z"
 ---
 
 ## Problem statement
@@ -286,6 +286,9 @@ exception.
 - [x] Marcar story como delivered.
 - [x] Aguardar revisao humana antes de accepted.
 
+- [x] Adicionar API unassign_for_room/2 reutilizando membership, autorização e operação transacional existente.
+- [x] Implementar handle_in treatment:unassign com reply estável e broadcast treatment:unassigned.
+- [x] Adicionar testes Phoenix para sucesso, erros, payload e ausência de broadcast em falhas.
 ## Fora do escopo
 
 Nao implementar nesta story:
@@ -315,5 +318,8 @@ Plano: escrever primeiro o teste de sucesso para `Treatments.unassign/2`, confir
 
 @JuruSysadmin 2026-08-21
 Implementação concluída com TDD. RED observado por `UndefinedFunctionError` de `Treatments.unassign/2`; GREEN após adicionar a operação de domínio. A operação valida role e membership, recarrega a Treatment autorizada sob `FOR UPDATE`, valida ownership/status, limpa assignment e grava `treatment_unassigned` atomicamente. Cobertos commercial, outro agent, fora da Room, estados inválidos, rollback de auditoria, stale state, concorrência e not_found. Verificação: 49 testes focados, 516 testes em `mix test`, `mix precommit`, format check e diff check passaram.
+
+@user 2026-08-22
+Contrato Phoenix concluído: adicionados Chat.Treatments.unassign_for_room/2 e handle_in("treatment:unassign", _params, socket), com reply estável, payload de estado persistido e broadcast treatment:unassigned somente após transição efetiva. Testes Phoenix cobrem sucesso, commercial forbidden, campos de ownership ignorados e broadcast. Verificação: RoomChannelAuthorizationTest 49 testes, mix test 542, mix precommit e mix format --check-formatted passaram. git diff --check global continua bloqueado por linha em branco preexistente em tratativas-infra/_icebox.md, fora do escopo.
 
 ## Attachments

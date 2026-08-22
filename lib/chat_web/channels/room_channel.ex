@@ -6,6 +6,7 @@ defmodule ChatWeb.RoomChannel do
   alias Chat.Accounts
   alias Chat.Messages
   alias Chat.Messages.Attachments
+  alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Treatments
   alias ChatWeb.Presence
@@ -16,7 +17,7 @@ defmodule ChatWeb.RoomChannel do
 
     if Rooms.room_member?(user.id, room_id) do
       send(self(), :after_join)
-      {:ok, %{room_id: room_id}, assign(socket, :room_id, room_id)}
+      {:ok, treatment_snapshot_payload(room_id), assign(socket, :room_id, room_id)}
     else
       {:error, %{reason: "unauthorized"}}
     end
@@ -179,6 +180,28 @@ defmodule ChatWeb.RoomChannel do
     end
   end
 
+  def handle_in("treatment:unassign", _params, socket) do
+    result =
+      Treatments.unassign_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
+
+    case result do
+      {:ok, unassigned_treatment, :unassigned} ->
+        payload = treatment_assignment_state_payload(unassigned_treatment)
+        broadcast!(socket, "treatment:unassigned", payload)
+        {:reply, {:ok, payload}, socket}
+
+      {:error, reason}
+      when reason in [:forbidden, :not_found, :not_assigned_agent, :invalid_status] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_unassignment_failed"}}, socket}
+    end
+  end
+
   def handle_in("treatment:resolve", _params, socket) do
     result =
       Treatments.resolve_for_room(
@@ -299,28 +322,57 @@ defmodule ChatWeb.RoomChannel do
   end
 
   defp treatment_assignment_payload(treatment) do
+    treatment = Repo.preload(treatment, :assigned_agent)
+
     %{
       treatment_id: treatment.id,
       assigned_agent_id: treatment.assigned_agent_id,
-      assigned_at: treatment.assigned_at
+      assigned_at: treatment.assigned_at,
+      assigned_agent_username: assigned_agent_username(treatment)
     }
   end
 
   defp treatment_resolution_payload(treatment) do
+    treatment = Repo.preload(treatment, :assigned_agent)
+
     %{
       treatment_id: treatment.id,
       status: treatment.status,
       resolved_by_id: treatment.resolved_by_id,
-      resolved_at: treatment.resolved_at
+      resolved_at: treatment.resolved_at,
+      assigned_agent_id: treatment.assigned_agent_id,
+      assigned_agent_username: assigned_agent_username(treatment),
+      assigned_at: treatment.assigned_at
     }
   end
 
   defp treatment_assignment_state_payload(treatment) do
+    treatment = Repo.preload(treatment, :assigned_agent)
+
     %{
       treatment_id: treatment.id,
       status: treatment.status,
       assigned_agent_id: treatment.assigned_agent_id,
-      assigned_at: treatment.assigned_at
+      assigned_at: treatment.assigned_at,
+      assigned_agent_username: assigned_agent_username(treatment)
     }
   end
+
+  defp treatment_snapshot_payload(room_id) do
+    case Treatments.get_by_room_id(room_id) do
+      nil ->
+        %{room_id: room_id}
+
+      treatment ->
+        Map.merge(%{room_id: room_id}, treatment_assignment_state_payload(treatment))
+        |> Map.merge(%{
+          id: treatment.id,
+          resolved_by_id: treatment.resolved_by_id,
+          resolved_at: treatment.resolved_at
+        })
+    end
+  end
+
+  defp assigned_agent_username(%{assigned_agent: %{username: username}}), do: username
+  defp assigned_agent_username(_treatment), do: nil
 end
