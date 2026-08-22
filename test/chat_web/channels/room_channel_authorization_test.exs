@@ -276,6 +276,43 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert transfer_audit_count(treatment, current_agent) == 1
   end
 
+  test "treatment:transfer rejects candidate that became invalid after listing (e.g. left room)" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-invalidation"}, %{})
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_099, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, _membership} = Rooms.join_room(target_agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    # 1. Discovery: candidate is listed as eligible
+    assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, current_agent)
+    assert Enum.any?(candidates, &(&1.id == target_agent.id))
+
+    # 2. Race condition: candidate leaves the room before mutation
+    assert {:ok, _} = Rooms.leave_room(target_agent.id, room.id)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-transfer-invalidation-socket", %{current_user: current_agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    # 3. Channel mutation is rejected and no broadcast is emitted
+    ref = push(socket, "treatment:transfer", %{"target_agent_id" => target_agent.id})
+
+    assert_reply ref, :error, %{reason: "invalid_target_agent"}
+    refute_broadcast "treatment:transferred", _payload
+    assert transfer_audit_count(treatment, current_agent) == 0
+
+    # Invariant: Treatment remains assigned to current_agent
+    persisted = Repo.get!(Treatment, treatment.id)
+    assert persisted.assigned_agent_id == current_agent.id
+    assert persisted.status == "in_progress"
+  end
+
   test "commercial member receives forbidden when transferring through the channel" do
     {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-commercial"}, %{})
     current_agent = logistics_agent_fixture()

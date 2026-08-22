@@ -1316,6 +1316,281 @@ defmodule Chat.TreatmentsTest do
     end
   end
 
+  describe "list_transfer_candidates/2" do
+    test "returns eligible logistics agents who are members of the room, excluding the assigned agent",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agent_b = logistics_agent_fixture()
+      agent_c = logistics_agent_fixture()
+      non_member_agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_101, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_b.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_c.id, room.id)
+
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent_a)
+      assert assigned.status == "in_progress"
+
+      # Query candidates as agent_a
+      assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, agent_a)
+
+      # Candidates must contain agent_b and agent_c, but NOT agent_a, owner, or non_member_agent
+      candidate_ids = Enum.map(candidates, & &1.id)
+      assert agent_b.id in candidate_ids
+      assert agent_c.id in candidate_ids
+      refute agent_a.id in candidate_ids
+      refute owner.id in candidate_ids
+      refute non_member_agent.id in candidate_ids
+
+      # Projection check: only id and username
+      for candidate <- candidates do
+        assert Map.keys(candidate) |> Enum.sort() == [:id, :username]
+      end
+
+      # Stable ordering by username asc
+      usernames = Enum.map(candidates, & &1.username)
+      assert usernames == Enum.sort(usernames)
+    end
+
+    test "returns eligible logistics agents regardless of Presence (offline agents included)",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agent_b = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_102, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_b.id, room.id)
+      assert {:ok, _} = Treatments.assign_agent(treatment, agent_a)
+
+      assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, agent_a)
+      assert Enum.any?(candidates, &(&1.id == agent_b.id))
+    end
+
+    test "returns {:error, :not_assigned_agent} when another logistics agent attempts to list candidates",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agent_b = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_103, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_b.id, room.id)
+      assert {:ok, _} = Treatments.assign_agent(treatment, agent_a)
+
+      # agent_b is a member and a logistics agent, but not the assigned agent
+      assert {:error, :not_assigned_agent} =
+               Treatments.list_transfer_candidates(room.id, agent_b)
+    end
+
+    test "returns {:error, :invalid_status} when treatment is not in_progress",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_104, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+
+      # Status is "open" (unassigned)
+      assert {:error, :invalid_status} =
+               Treatments.list_transfer_candidates(room.id, agent_a)
+
+      # Assign and resolve
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent_a)
+      assert {:ok, _resolved} = Treatments.resolve(assigned, agent_a)
+
+      # Status is "resolved"
+      assert {:error, :invalid_status} =
+               Treatments.list_transfer_candidates(room.id, agent_a)
+    end
+
+    test "returns {:error, :forbidden} when caller lacks treatment.transfer permission",
+         %{user: commercial} do
+      agent_a = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_105, commercial.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Treatments.assign_agent(treatment, agent_a)
+
+      # Commercial user lacks "treatment.transfer" permission
+      assert {:error, :forbidden} =
+               Treatments.list_transfer_candidates(room.id, commercial)
+    end
+
+    test "returns {:error, :forbidden} when caller is not a member of the room",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      outsider_agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_106, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Treatments.assign_agent(treatment, agent_a)
+
+      assert {:error, :forbidden} =
+               Treatments.list_transfer_candidates(room.id, outsider_agent)
+    end
+
+    test "returns {:error, :not_found} for unknown room or invalid UUID",
+         %{user: _owner} do
+      agent = logistics_agent_fixture()
+      non_existent_room_id = Ecto.UUID.generate()
+
+      assert {:error, :not_found} =
+               Treatments.list_transfer_candidates(non_existent_room_id, agent)
+
+      assert {:error, :invalid_id} =
+               Treatments.list_transfer_candidates("not-a-uuid", agent)
+    end
+
+    test "is a pure read query and does not produce mutations, audit events or status changes",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agent_b = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_107, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_b.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent_a)
+
+      audit_events_before = Treatments.list_audit_events(treatment.id, owner.id)
+
+      assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, agent_a)
+      assert length(candidates) == 1
+
+      treatment_after = Repo.get!(Treatment, treatment.id)
+      assert treatment_after.status == assigned.status
+      assert treatment_after.assigned_agent_id == assigned.assigned_agent_id
+      assert treatment_after.assigned_at == assigned.assigned_at
+      assert treatment_after.resolved_by_id == nil
+      assert treatment_after.resolved_at == nil
+
+      audit_events_after = Treatments.list_audit_events(treatment.id, owner.id)
+      assert length(audit_events_after) == length(audit_events_before)
+    end
+
+    test "executes a constant number of queries and avoids N+1 regardless of candidate count",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agents = for _ <- 1..5, do: logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_108, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      for agent <- agents, do: assert({:ok, _} = Rooms.join_room(agent.id, room.id))
+
+      assert {:ok, _} = Treatments.assign_agent(treatment, agent_a)
+
+      handler_id = "transfer-candidates-query-counter-#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      :ok =
+        :telemetry.attach(
+          handler_id,
+          [:chat, :repo, :query],
+          fn _event, _measurements, metadata, _config ->
+            send(test_pid, {:query, metadata.query})
+          end,
+          nil
+        )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, agent_a)
+      assert length(candidates) == 5
+
+      queries =
+        Stream.repeatedly(fn ->
+          receive do
+            {:query, query} -> query
+          after
+            0 -> nil
+          end
+        end)
+        |> Enum.take_while(&(&1 != nil))
+
+      # Verifies constant O(1) query execution (no query executed per candidate)
+      assert length(queries) <= 4
+    end
+
+    test "revalidates candidate eligibility upon mutation when candidate leaves room after listing",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agent_b = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_109, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_b.id, room.id)
+      assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent_a)
+
+      # 1. Discovery: agent_b is present in the list of eligible candidates
+      assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, agent_a)
+      assert Enum.any?(candidates, &(&1.id == agent_b.id))
+
+      # 2. Race condition: agent_b leaves the room after discovery but before mutation
+      assert {:ok, _} = Rooms.leave_room(agent_b.id, room.id)
+
+      # 3. Mutation: transfer_agent_for_room revalidates and rejects the now-invalid target
+      assert {:error, :invalid_target_agent} =
+               Treatments.transfer_agent_for_room(room.id, agent_a, agent_b.id)
+
+      # Invariant: Treatment ownership and status remain untouched
+      persisted = Repo.get!(Treatment, treatment.id)
+      assert persisted.assigned_agent_id == agent_a.id
+      assert persisted.status == "in_progress"
+    end
+
+    test "all returned candidates strictly satisfy fundamental target criteria of transfer_agent_for_room/3",
+         %{user: owner} do
+      agent_a = logistics_agent_fixture()
+      agent_b = logistics_agent_fixture()
+      agent_c = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_044_110, owner.id)
+
+      assert {:ok, _} = Rooms.join_room(agent_a.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_b.id, room.id)
+      assert {:ok, _} = Rooms.join_room(agent_c.id, room.id)
+      assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent_a)
+
+      assert {:ok, candidates} = Treatments.list_transfer_candidates(room.id, agent_a)
+      assert length(candidates) == 2
+
+      # Every candidate in the list must satisfy all target criteria:
+      for candidate <- candidates do
+        user = Repo.get!(User, candidate.id)
+        assert user.role == "logistics_agent"
+        assert user.id != agent_a.id
+        assert user.id != treatment.assigned_agent_id
+        assert {:ok, _} = Rooms.fetch_member_room(user.id, room.id)
+      end
+
+      # Furthermore, transfer to any returned candidate succeeds in transfer_agent_for_room
+      target = hd(candidates)
+
+      assert {:ok, transferred, :transferred} =
+               Treatments.transfer_agent_for_room(room.id, agent_a, target.id)
+
+      assert transferred.assigned_agent_id == target.id
+      assert transferred.status == "in_progress"
+    end
+  end
+
   defp logistics_agent_fixture do
     %User{}
     |> User.auth_changeset(%{

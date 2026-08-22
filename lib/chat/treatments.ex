@@ -166,6 +166,27 @@ defmodule Chat.Treatments do
   end
 
   @doc """
+  Lists eligible transfer candidate agents for a Treatment in progress.
+  Pure read-only operation (no mutations, no exclusive locks, no audit events, no broadcasts).
+  """
+  def list_transfer_candidates(room_id, %User{} = current_user) do
+    with {:ok, room_id} <- Ecto.UUID.cast(room_id),
+         :ok <- Authorization.authorize(current_user, "treatment.transfer"),
+         {:ok, _room} <- Rooms.fetch_member_room(current_user.id, room_id),
+         %Treatment{} = treatment <- get_by_room_id(room_id),
+         :ok <- validate_transfer_listing_state(treatment, current_user) do
+      candidates =
+        query_transfer_candidates(room_id, current_user.id, treatment.assigned_agent_id)
+
+      {:ok, candidates}
+    else
+      nil -> {:error, :not_found}
+      :error -> {:error, :invalid_id}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
   Lists active treatments accessible to the given user.
   """
   def list_queue(%User{} = user) do
@@ -177,6 +198,44 @@ defmodule Chat.Treatments do
       order_by: [desc: t.inserted_at]
     )
     |> Repo.all()
+  end
+
+  defp validate_transfer_listing_state(
+         %Treatment{status: status, assigned_agent_id: assigned_agent_id},
+         user
+       ) do
+    cond do
+      status != "in_progress" ->
+        {:error, :invalid_status}
+
+      assigned_agent_id != user.id ->
+        {:error, :not_assigned_agent}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp query_transfer_candidates(room_id, current_user_id, assigned_agent_id) do
+    base_query =
+      from(user in User,
+        join: membership in "room_members",
+        on: membership.user_id == user.id,
+        where: membership.room_id == type(^room_id, :binary_id),
+        where: user.role == "logistics_agent",
+        where: user.id != ^current_user_id,
+        order_by: [asc: user.username],
+        select: %{id: user.id, username: user.username}
+      )
+
+    query =
+      if is_binary(assigned_agent_id) and assigned_agent_id != current_user_id do
+        from(user in base_query, where: user.id != ^assigned_agent_id)
+      else
+        base_query
+      end
+
+    Repo.all(query)
   end
 
   defp open_or_reopen(room, order_id, user_id) do

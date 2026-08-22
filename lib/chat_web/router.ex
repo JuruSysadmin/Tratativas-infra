@@ -70,6 +70,7 @@ defmodule ChatWeb.Router do
       post "/join", RoomController, :join
       post "/leave", RoomController, :leave
       get "/online", RoomController, :online
+      get "/transfer-agents", TreatmentTransferAgentController, :index
       post "/attachments/presign", MessageAttachmentController, :presign
 
       resources "/messages", MessageController, only: [:index, :create, :delete]
