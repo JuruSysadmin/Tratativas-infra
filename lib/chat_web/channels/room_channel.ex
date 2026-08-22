@@ -97,6 +97,9 @@ defmodule ChatWeb.RoomChannel do
       {:ok, _message} ->
         {:reply, :ok, socket}
 
+      {:error, :treatment_closed} ->
+        {:reply, {:error, %{reason: "treatment_closed"}}, socket}
+
       {:error, :invalid_client_id} ->
         {:reply, {:error, %{reason: "invalid_client_id"}}, socket}
 

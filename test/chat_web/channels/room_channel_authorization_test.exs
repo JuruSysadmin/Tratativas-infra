@@ -1518,6 +1518,83 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
            } = reopened_snapshot
   end
 
+  test "rejects message:new when treatment is resolved" do
+    agent = logistics_agent_fixture()
+    {:ok, %{room: room}} = Treatments.open_for_order(11_223_344, agent.id)
+    {:ok, _assigned, :assigned} = Treatments.assign_agent_for_room(room.id, agent)
+    {:ok, _resolved, :resolved} = Treatments.resolve_for_room(room.id, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-resolved-writer", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    client_id = Ecto.UUID.generate()
+
+    ref =
+      push(socket, "message:new", %{
+        "content" => "Tentativa em sala resolvida",
+        "client_id" => client_id
+      })
+
+    assert_reply ref, :error, %{reason: "treatment_closed"}
+    refute_push "message:new", _payload
+    assert Messages.list_messages(room.id) == []
+  end
+
+  test "rejects message:new when treatment is closed" do
+    agent = logistics_agent_fixture()
+    {:ok, %{treatment: treatment, room: room}} = Treatments.open_for_order(11_223_345, agent.id)
+
+    treatment
+    |> Ecto.Changeset.change(%{status: "closed"})
+    |> Repo.update!()
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-closed-writer", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    client_id = Ecto.UUID.generate()
+
+    ref =
+      push(socket, "message:new", %{
+        "content" => "Tentativa em sala fechada",
+        "client_id" => client_id
+      })
+
+    assert_reply ref, :error, %{reason: "treatment_closed"}
+    refute_push "message:new", _payload
+    assert Messages.list_messages(room.id) == []
+  end
+
+  test "allows message:new after treatment is reopened" do
+    agent = logistics_agent_fixture()
+    {:ok, %{room: room}} = Treatments.open_for_order(11_223_346, agent.id)
+    {:ok, _assigned, :assigned} = Treatments.assign_agent_for_room(room.id, agent)
+    {:ok, _resolved, :resolved} = Treatments.resolve_for_room(room.id, agent)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-reopened-writer", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    reopen_ref = push(socket, "treatment:reopen", %{})
+    assert_reply reopen_ref, :ok
+
+    client_id = Ecto.UUID.generate()
+
+    msg_ref =
+      push(socket, "message:new", %{
+        "content" => "Mensagem após reabertura",
+        "client_id" => client_id
+      })
+
+    assert_reply msg_ref, :ok
+    assert_push "message:new", %{content: "Mensagem após reabertura"}
+    assert length(Messages.list_messages(room.id)) == 1
+  end
+
   defp logistics_agent_fixture do
     %User{}
     |> User.auth_changeset(%{

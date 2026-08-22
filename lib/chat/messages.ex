@@ -20,6 +20,7 @@ defmodule Chat.Messages do
   alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Rooms.{Room, RoomMember}
+  alias Chat.Treatments.Treatment
   alias Ecto.Multi
 
   def list_messages(room_id, opts \\ []) do
@@ -356,6 +357,9 @@ defmodule Chat.Messages do
     |> Multi.run(:authorized_sender, fn repo, _changes ->
       authorize_sender(repo, user_id, room_id)
     end)
+    |> Multi.run(:treatment_status, fn repo, _changes ->
+      verify_treatment_active(repo, room_id)
+    end)
     |> Multi.insert(:message, changeset)
     |> Multi.run(:attachments, fn repo, %{message: message} ->
       Attachments.attach_to_message(repo, user_id, room_id, message.id, attachment_ids)
@@ -401,6 +405,16 @@ defmodule Chat.Messages do
          _broadcaster
        ),
        do: {:error, :message_deleted}
+
+  defp handle_insert_result(
+         {:error, :treatment_status, :treatment_closed, _changes},
+         _client_id,
+         _user_id,
+         _room_id,
+         _attrs,
+         _broadcaster
+       ),
+       do: {:error, :treatment_closed}
 
   defp handle_insert_result(
          {:error, :authorized_sender, :forbidden, _changes},
@@ -475,6 +489,24 @@ defmodule Chat.Messages do
     end
   rescue
     Ecto.Query.CastError -> {:error, :forbidden}
+  end
+
+  defp verify_treatment_active(repo, room_id) do
+    query =
+      from t in Treatment,
+        where: t.room_id == ^room_id,
+        select: t.status,
+        lock: "FOR SHARE"
+
+    case repo.one(query) do
+      status when status in ["resolved", "closed"] ->
+        {:error, :treatment_closed}
+
+      _ ->
+        {:ok, :active}
+    end
+  rescue
+    Ecto.Query.CastError -> {:ok, :active}
   end
 
   defp insert_mentions(repo, message) do
