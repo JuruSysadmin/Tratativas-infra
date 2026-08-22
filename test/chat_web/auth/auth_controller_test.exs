@@ -1,6 +1,8 @@
 defmodule ChatWeb.AuthControllerTest do
   use ChatWeb.ConnCase, async: false
 
+  alias Chat.Accounts.User
+
   setup do
     previous_login_module = Application.get_env(:chat, :auth_login_module)
     Application.put_env(:chat, :auth_login_module, Chat.AuthLoginStub)
@@ -24,6 +26,29 @@ defmodule ChatWeb.AuthControllerTest do
       })
 
     assert response(conn, 404)
+  end
+
+  test "authenticated Chat identity exposes only id and role", %{conn: conn} do
+    user = %User{id: "550e8400-e29b-41d4-a716-446655440000", role: "logistics_agent"}
+
+    conn =
+      conn
+      |> assign(:current_user, user)
+      |> ChatWeb.AuthController.me(%{})
+
+    assert %{
+             "user" => %{
+               "id" => "550e8400-e29b-41d4-a716-446655440000",
+               "role" => "logistics_agent"
+             }
+           } =
+             json_response(conn, 200)
+  end
+
+  test "Chat identity endpoint requires authentication", %{conn: conn} do
+    conn = get(conn, ~p"/api/auth/me")
+
+    assert response(conn, 401)
   end
 
   defp test_credential do

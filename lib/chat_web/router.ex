@@ -54,6 +54,12 @@ defmodule ChatWeb.Router do
     post "/refresh", AuthController, :refresh
   end
 
+  scope "/api/auth", ChatWeb do
+    pipe_through [:api, :auth]
+
+    get "/me", AuthController, :me
+  end
+
   scope "/api", ChatWeb do
     pipe_through [:api, :auth]
 

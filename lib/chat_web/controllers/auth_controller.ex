@@ -40,6 +40,17 @@ defmodule ChatWeb.AuthController do
     end
   end
 
+  def me(conn, _params) do
+    user = conn.assigns.current_user
+
+    json(conn, %{
+      user: %{
+        id: user.id,
+        role: user.role
+      }
+    })
+  end
+
   defp authenticate(conn, username, password) do
     login_module = Application.get_env(:chat, :auth_login_module, Login)
 
