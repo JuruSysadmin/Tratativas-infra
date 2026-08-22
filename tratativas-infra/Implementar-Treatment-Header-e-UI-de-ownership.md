@@ -4,12 +4,13 @@ type: feature
 estimate: "3"
 tags: [frontend, chat, treatments, carbon, ownership]
 created: "2026-08-22T01:30:00Z"
-modified: "2026-08-22T03:05:17Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-22T01:31:46Z"
 finished: "2026-08-22T03:05:17Z"
 delivered: "2026-08-22T03:05:17Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

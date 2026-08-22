@@ -3,11 +3,12 @@ title: Expor transferencia da Tratativa via Phoenix Channel
 type: feature
 estimate: 2
 tags: [backend, elixir, phoenix, channels, treatments, authorization, tdd]
-status: delivered
-modified: "2026-08-21T19:55:14Z"
+status: accepted
+modified: "2026-08-22T16:11:47Z"
 started: "2026-08-21T19:47:41Z"
 finished: "2026-08-21T19:55:05Z"
 delivered: "2026-08-21T19:55:05Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

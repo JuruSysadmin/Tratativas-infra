@@ -2,12 +2,13 @@
 title: Publicar atribuição do agente em realtime
 type: feature
 created: "2026-08-21T01:50:10Z"
-modified: "2026-08-21T13:11:49Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T01:58:15Z"
 finished: "2026-08-21T13:11:43Z"
 delivered: "2026-08-21T13:11:43Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 # Publicar atribuição do agente em realtime

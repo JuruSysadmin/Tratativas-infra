@@ -2,14 +2,15 @@
 title: Permitir reabrir Tratativa
 type: feature
 created: "2026-08-21T14:35:51Z"
-modified: "2026-08-21T15:12:00Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 estimate: "3"
 tags: [backend, elixir, treatments, authorization, tdd]
 started: "2026-08-21T14:36:30Z"
 finished: "2026-08-21T15:12:00Z"
 delivered: "2026-08-21T15:12:00Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

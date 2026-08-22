@@ -2,12 +2,13 @@
 title: Garantir rollback transacional na atribuicao por sala
 type: bug
 created: "2026-08-21T14:14:54Z"
-modified: "2026-08-21T14:21:16Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T14:15:18Z"
 finished: "2026-08-21T14:21:16Z"
 delivered: "2026-08-21T14:21:16Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

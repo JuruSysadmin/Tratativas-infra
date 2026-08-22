@@ -3,11 +3,12 @@ title: Permitir liberar Tratativa
 type: feature
 estimate: 3
 tags: [backend, elixir, treatments, authorization, audit, tdd]
-status: delivered
-modified: "2026-08-22T03:14:43Z"
+status: accepted
+modified: "2026-08-22T16:11:47Z"
 started: "2026-08-21T17:30:24Z"
 finished: "2026-08-22T03:14:43Z"
 delivered: "2026-08-22T03:14:43Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

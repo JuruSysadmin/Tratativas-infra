@@ -4,12 +4,13 @@ type: feature
 estimate: 3
 tags: [backend, elixir, treatments, lifecycle, authorization, database, tdd]
 created: "2026-08-21T02:36:06Z"
-modified: "2026-08-21T03:18:48Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T02:40:20Z"
 finished: "2026-08-21T02:49:13Z"
 delivered: "2026-08-21T02:49:13Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 # Permitir resolver Tratativa

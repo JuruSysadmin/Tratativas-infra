@@ -3,11 +3,12 @@ title: Publicar reabertura da Tratativa em realtime
 type: feature
 estimate: 2
 tags: [backend, elixir, phoenix, channels, treatments, realtime, tdd]
-status: delivered
-modified: "2026-08-21T16:40:42Z"
+status: accepted
+modified: "2026-08-22T16:11:47Z"
 started: "2026-08-21T16:36:16Z"
 finished: "2026-08-21T16:40:42Z"
 delivered: "2026-08-21T16:40:42Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

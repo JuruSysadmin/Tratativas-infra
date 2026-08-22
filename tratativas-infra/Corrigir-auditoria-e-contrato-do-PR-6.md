@@ -2,12 +2,13 @@
 title: Corrigir auditoria e contrato do PR 6
 type: bug
 created: "2026-08-21T03:35:18Z"
-modified: "2026-08-21T03:44:19Z"
+modified: "2026-08-22T16:11:23Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T03:35:54Z"
 finished: "2026-08-21T03:44:19Z"
 delivered: "2026-08-21T03:44:19Z"
+accepted: "2026-08-21T11:36:06Z"
 ---
 
 ## Problem statement

@@ -1,9 +1,10 @@
 ---
-modified: "2026-08-21T00:04:06Z"
-status: delivered
+modified: "2026-08-22T16:11:47Z"
+status: accepted
 started: "2026-08-20T23:54:23Z"
 finished: "2026-08-21T00:04:06Z"
 delivered: "2026-08-21T00:04:06Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 # Adicionar agente responsável à Tratativa

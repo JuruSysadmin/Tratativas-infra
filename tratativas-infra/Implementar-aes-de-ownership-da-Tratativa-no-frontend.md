@@ -2,13 +2,14 @@
 title: Implementar ações de ownership da Tratativa no frontend
 type: feature
 created: "2026-08-21T21:57:46Z"
-modified: "2026-08-22T01:05:55Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 estimate: "8"
 started: "2026-08-21T21:58:24Z"
 finished: "2026-08-22T01:05:55Z"
 delivered: "2026-08-22T01:05:55Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

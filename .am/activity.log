@@ -1,0 +1,142 @@
+2026-08-20T22:16:37Z	JuruSysadmin	created	tratativas-infra/Definir-matriz-de-permissoes-da-Tratativa.md	target=icebox position=bottom
+2026-08-20T22:19:32Z	JuruSysadmin	started	tratativas-infra/Definir-matriz-de-permissoes-da-Tratativa.md	Implementação iniciada na branch feat/centralize-treatment-authorization; matriz e testes já estão em revisão.
+2026-08-20T22:19:59Z	JuruSysadmin	delivered	tratativas-infra/Definir-matriz-de-permissoes-da-Tratativa.md	Implementação e verificações concluídas; aguardando revisão humana.
+2026-08-20T22:29:57Z	JuruSysadmin	started	tratativas-infra/Definir-matriz-de-permissoes-da-Tratativa.md	Retomada para tratar feedback da revisão: role nil, argumentos inválidos e diagnóstico do teste de logistics_agent.
+2026-08-20T22:32:24Z	JuruSysadmin	delivered	tratativas-infra/Definir-matriz-de-permissoes-da-Tratativa.md	Feedback da revisão tratado e gates completos aprovados; aguardando aceite humano.
+2026-08-20T23:54:23Z	JuruSysadmin	started	tratativas-infra/Adicionar-agente-responsavel-a-Tratativa.md	Alinhamento concluído: FK nilify_all, changeset dedicado interno e story promovida da icebox para a prioridade.
+2026-08-21T00:04:06Z	JuruSysadmin	delivered	tratativas-infra/Adicionar-agente-responsavel-a-Tratativa.md	Acceptance criteria implementados e verificados localmente. Entregar para aceite humano; não aceitar automaticamente.
+2026-08-21T00:59:00Z	JuruSysadmin	created	tratativas-infra/Permitir-que-agente-assuma-Tratativa.md	
+2026-08-21T01:06:28Z	JuruSysadmin	started	tratativas-infra/Permitir-que-agente-assuma-Tratativa.md	Alinhamento concluído. Estratégia de concorrência definida: SELECT FOR UPDATE em Repo.transaction/1, autorização antes do lock.
+2026-08-21T01:12:14Z	JuruSysadmin	delivered	tratativas-infra/Permitir-que-agente-assuma-Tratativa.md	Implementação e gates da story concluídos. Entregar para revisão humana; manter pendente apenas o diff check global bloqueado por arquivo preexistente não relacionado.
+2026-08-21T01:23:50Z	JuruSysadmin	created	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T01:27:12Z	JuruSysadmin	started	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Alinhamento concluído. Sala sem Treatment é estado válido e deve retornar reply not_found sem exception.
+2026-08-21T01:31:37Z	JuruSysadmin	delivered	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Implementação e verificações concluídas. Entregar para revisão humana; não aceitar automaticamente. O único item pendente é git diff check global afetado por arquivo preexistente não relacionado.
+2026-08-21T01:41:05Z	JuruSysadmin	started	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Reaberta para revisão manual: o cenário not_found precisa comprovar explicitamente que o processo do Channel continua vivo.
+2026-08-21T01:41:59Z	JuruSysadmin	delivered	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Revisão manual concluída e cobertura de Channel vivo adicionada ao cenário not_found. Entregar para aceite humano.
+2026-08-21T01:44:46Z	JuruSysadmin	accepted	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Aceite humano confirmado pelo PM após revisão manual. Acceptance Criteria encerrados.
+2026-08-21T01:50:10Z	JuruSysadmin	created	tratativas-infra/Publicar-atribuio-do-agente-em-realtime.md	
+2026-08-21T01:58:15Z	JuruSysadmin	started	tratativas-infra/Publicar-atribuio-do-agente-em-realtime.md	Story iniciada pelo PM; estimate TBD permanece explícito até definição posterior.
+2026-08-21T02:04:23Z	JuruSysadmin	delivered	tratativas-infra/Publicar-atribuio-do-agente-em-realtime.md	Implementação e verificações concluídas. Entregar para aceite humano; não aceitar automaticamente.
+2026-08-21T02:13:05Z	JuruSysadmin	created	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	target=priority position=top
+2026-08-21T02:13:46Z	JuruSysadmin	started	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	Implementar open → in_progress dentro de assign_agent/2; resolve e closed ficam fora do escopo.
+2026-08-21T02:18:14Z	JuruSysadmin	finished	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	
+2026-08-21T02:18:14Z	JuruSysadmin	delivered	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	
+2026-08-21T02:28:07Z	JuruSysadmin	started	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	Feedback de revisão: explicitar a matriz completa de assign_agent/2 e cobrir resolved/closed como invalid_status, sem reabertura implícita.
+2026-08-21T02:30:18Z	JuruSysadmin	finished	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	
+2026-08-21T02:30:18Z	JuruSysadmin	delivered	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	
+2026-08-21T02:36:06Z	JuruSysadmin	created	tratativas-infra/Permitir-resolver-Tratativa.md	target=priority position=top
+2026-08-21T02:40:20Z	JuruSysadmin	started	tratativas-infra/Permitir-resolver-Tratativa.md	Revisão: somente o agente atribuído pode resolver; separar autorização por papel de ownership e formalizar o resultado da corrida sob lock.
+2026-08-21T02:49:13Z	JuruSysadmin	finished	tratativas-infra/Permitir-resolver-Tratativa.md	
+2026-08-21T02:49:13Z	JuruSysadmin	delivered	tratativas-infra/Permitir-resolver-Tratativa.md	
+2026-08-21T03:13:05Z	JuruSysadmin	started	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Revisão: tornar atribuição no Channel exaustiva, remover Repo/Treatment direto do transporte e auditar treatment_assigned/treatment_resolved.
+2026-08-21T03:18:48Z	JuruSysadmin	finished	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T03:18:48Z	JuruSysadmin	delivered	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T03:25:26Z	JuruSysadmin	started	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Revisão adicional: revalidar membership no evento para impedir atribuição por socket após revogação.
+2026-08-21T03:25:38Z	JuruSysadmin	finished	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T03:25:38Z	JuruSysadmin	delivered	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T03:35:18Z	JuruSysadmin	bug	tratativas-infra/Corrigir-auditoria-e-contrato-do-PR-6.md	target=priority position=top
+2026-08-21T03:35:54Z	JuruSysadmin	started	tratativas-infra/Corrigir-auditoria-e-contrato-do-PR-6.md	Revisão corretiva estritamente limitada aos achados solicitados no PR #6
+2026-08-21T03:44:19Z	JuruSysadmin	delivered	tratativas-infra/Corrigir-auditoria-e-contrato-do-PR-6.md	Correções e gates concluídos; entregue para revisão humana, sem aceite automático.
+2026-08-21T11:36:06Z	JuruSysadmin	accepted	tratativas-infra/Corrigir-auditoria-e-contrato-do-PR-6.md	Aceite humano confirmado: correções do PR #6 aprovadas; ressalva do diff check global permanece fora do escopo.
+2026-08-21T12:43:02Z	JuruSysadmin	created	tratativas-infra/Expor-resolucao-da-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T12:44:13Z	JuruSysadmin	started	tratativas-infra/Expor-resolucao-da-Tratativa-via-Phoenix-Channel.md	Implementação iniciada com TDD; primeiro será observado RED no teste do Phoenix Channel.
+2026-08-21T12:53:51Z	JuruSysadmin	delivered	tratativas-infra/Expor-resolucao-da-Tratativa-via-Phoenix-Channel.md	Critérios implementados e verificações verdes; entregue para revisão humana. Não aceitar automaticamente.
+2026-08-21T13:07:53Z	JuruSysadmin	started	tratativas-infra/Publicar-atribuio-do-agente-em-realtime.md	Request changes funcional: broadcast deve depender do resultado transacional :assigned/:idempotent, nunca de struct potencialmente stale; adicionando regressão forte.
+2026-08-21T13:11:43Z	JuruSysadmin	delivered	tratativas-infra/Publicar-atribuio-do-agente-em-realtime.md	Request changes funcional coberto por regressão stale; implementação atual já decide broadcast pelo resultado transacional. Verificações verdes; entregue novamente para revisão humana.
+2026-08-21T13:59:15Z	JuruSysadmin	created	tratativas-infra/Publicar-resolucao-da-Tratativa-em-realtime.md	target=priority position=top
+2026-08-21T14:00:09Z	JuruSysadmin	started	tratativas-infra/Publicar-resolucao-da-Tratativa-em-realtime.md	Implementar propagacao realtime com resultado explicito do dominio e TDD
+2026-08-21T14:07:14Z	JuruSysadmin	finished	tratativas-infra/Publicar-resolucao-da-Tratativa-em-realtime.md	Implementacao e verificacoes concluidas: 56 testes focados e precommit com 487 testes
+2026-08-21T14:07:14Z	JuruSysadmin	delivered	tratativas-infra/Publicar-resolucao-da-Tratativa-em-realtime.md	Pronta para revisao humana; nao aceita automaticamente
+2026-08-21T14:14:54Z	JuruSysadmin	bug	tratativas-infra/Garantir-rollback-transacional-na-atribuicao-por-sala.md	target=priority position=top
+2026-08-21T14:15:18Z	JuruSysadmin	started	tratativas-infra/Garantir-rollback-transacional-na-atribuicao-por-sala.md	Corrigir rollback fora de transaction com regressao TDD
+2026-08-21T14:21:16Z	JuruSysadmin	finished	tratativas-infra/Garantir-rollback-transacional-na-atribuicao-por-sala.md	Rollback transacional corrigido; 57 testes focados e 488 completos passaram
+2026-08-21T14:21:16Z	JuruSysadmin	delivered	tratativas-infra/Garantir-rollback-transacional-na-atribuicao-por-sala.md	Pronta para revisao humana no PR 10
+2026-08-21T14:35:51Z	JuruSysadmin	created	tratativas-infra/Permitir-reabrir-Tratativa.md	target=priority position=top
+2026-08-21T14:36:30Z	JuruSysadmin	started	tratativas-infra/Permitir-reabrir-Tratativa.md	Implementar transicao resolved para in_progress com TDD e auditoria atomica
+2026-08-21T14:42:37Z	JuruSysadmin	finished	tratativas-infra/Permitir-reabrir-Tratativa.md	Dominio reopen implementado com TDD; 44 focados e 496 completos passaram
+2026-08-21T14:42:37Z	JuruSysadmin	delivered	tratativas-infra/Permitir-reabrir-Tratativa.md	Pronta para revisao humana; Channel e frontend fora do escopo
+2026-08-21T14:58:40Z	JuruSysadmin	rejected	tratativas-infra/Permitir-reabrir-Tratativa.md	PR review: reopen/2 valida role, mas nao restringe a Treatment por membership da Room
+2026-08-21T14:58:40Z	JuruSysadmin	started	tratativas-infra/Permitir-reabrir-Tratativa.md	Corrigir autorizacao contextual por membership com TDD
+2026-08-21T15:12:00Z	JuruSysadmin	finished	tratativas-infra/Permitir-reabrir-Tratativa.md	Membership contextual corrigida com TDD; 45 focados e 497 completos passaram
+2026-08-21T15:12:00Z	JuruSysadmin	delivered	tratativas-infra/Permitir-reabrir-Tratativa.md	Request changes atendido; pronta para nova revisao no PR 11
+2026-08-21T15:57:54Z	JuruSysadmin	created	tratativas-infra/Expor-reabertura-da-Tratativa-via-Phoenix-Channel.md	target=priority position=top
+2026-08-21T15:58:56Z	JuruSysadmin	started	tratativas-infra/Expor-reabertura-da-Tratativa-via-Phoenix-Channel.md	Story registrada com contrato, matriz TDD, tarefas de implementação e gates de verificação.
+2026-08-21T16:04:01Z	JuruSysadmin	delivered	tratativas-infra/Expor-reabertura-da-Tratativa-via-Phoenix-Channel.md	Implementação concluída com TDD. RED observado pela ausência do handler; GREEN após adicionar reopen_for_room/2 e treatment:reopen. Cobertos commercial, logistics_agent, membership fora da Room, forbidden, invalid_status, Room sem Treatment, payload não confiável, auditoria e ausência de broadcast. Verificação: 34 testes focados, mix test com 504 testes, mix format --check-formatted, mix precommit e git diff --check passaram. Aguardando revisão humana; não aceitar automaticamente.
+2026-08-21T16:12:00Z	JuruSysadmin	started	tratativas-infra/Expor-reabertura-da-Tratativa-via-Phoenix-Channel.md	Reaberta para atender feedback de revisão sobre validação de membership na API por Room.
+2026-08-21T16:15:15Z	JuruSysadmin	delivered	tratativas-infra/Expor-reabertura-da-Tratativa-via-Phoenix-Channel.md	Feedback de revisão atendido e revalidado. Aguardando nova revisão humana.
+2026-08-21T16:34:09Z	JuruSysadmin	created	tratativas-infra/Publicar-reabertura-da-Tratativa-em-realtime.md	target=priority position=top
+2026-08-21T16:36:16Z	JuruSysadmin	started	tratativas-infra/Publicar-reabertura-da-Tratativa-em-realtime.md	Implementação iniciada com TDD na branch feat/broadcast-treatment-reopen; escopo limitado ao broadcast pós-reabertura confirmada.
+2026-08-21T16:40:42Z	JuruSysadmin	delivered	tratativas-infra/Publicar-reabertura-da-Tratativa-em-realtime.md	Story implementada e entregue para revisão humana; não aceita automaticamente.
+2026-08-21T17:29:19Z	JuruSysadmin	created	tratativas-infra/Permitir-liberar-Tratativa.md	target=priority position=top
+2026-08-21T17:30:24Z	JuruSysadmin	started	tratativas-infra/Permitir-liberar-Tratativa.md	Implementação iniciada com TDD na branch feat/unassign-treatment; Channel, broadcast e transferência permanecem fora do escopo.
+2026-08-21T17:36:30Z	JuruSysadmin	delivered	tratativas-infra/Permitir-liberar-Tratativa.md	Story implementada e entregue para revisão humana; Channel, broadcast e transferência permanecem fora do escopo.
+2026-08-21T19:15:48Z	JuruSysadmin	created	tratativas-infra/Permitir-transferir-Tratativa-diretamente-para-outro-agente.md	target=priority position=bottom
+2026-08-21T19:16:30Z	JuruSysadmin	started	tratativas-infra/Permitir-transferir-Tratativa-diretamente-para-outro-agente.md	
+2026-08-21T19:23:57Z	JuruSysadmin	delivered	tratativas-infra/Permitir-transferir-Tratativa-diretamente-para-outro-agente.md	Implementacao e verificacoes locais concluidas; aguardando revisao humana.
+2026-08-21T19:47:00Z	JuruSysadmin	created	tratativas-infra/Expor-transferencia-da-Tratativa-via-Phoenix-Channel.md	target=priority position=bottom
+2026-08-21T19:47:41Z	JuruSysadmin	started	tratativas-infra/Expor-transferencia-da-Tratativa-via-Phoenix-Channel.md	
+2026-08-21T19:55:05Z	JuruSysadmin	delivered	tratativas-infra/Expor-transferencia-da-Tratativa-via-Phoenix-Channel.md	Implementacao e verificacoes locais concluidas; aguardando revisao humana.
+2026-08-21T20:21:31Z	JuruSysadmin	created	tratativas-infra/Publicar-transferencia-da-Tratativa-em-realtime.md	target=priority position=bottom
+2026-08-21T20:22:02Z	JuruSysadmin	started	tratativas-infra/Publicar-transferencia-da-Tratativa-em-realtime.md	Iniciando TDD para publicar a transferência somente após confirmação do domínio.
+2026-08-21T20:25:29Z	JuruSysadmin	delivered	tratativas-infra/Publicar-transferencia-da-Tratativa-em-realtime.md	Implementação pronta para revisão humana; aceite não realizado pelo agente. Verificações de código e testes passaram, com a ressalva documentada sobre git diff --check global em alteração preexistente.
+2026-08-21T20:45:05Z	JuruSysadmin	created	tratativas-infra/Refatorar-payload-compartilhado-de-Tratativa.md	target=priority position=bottom
+2026-08-21T20:45:21Z	JuruSysadmin	started	tratativas-infra/Refatorar-payload-compartilhado-de-Tratativa.md	Iniciando refatoração sem mudança de contrato público.
+2026-08-21T20:46:14Z	JuruSysadmin	accepted	tratativas-infra/Refatorar-payload-compartilhado-de-Tratativa.md	Helper privado compartilhado aplicado; testes focados e mix precommit passaram. Entregue para revisão humana.
+2026-08-21T21:34:00Z	JuruSysadmin	created	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	target=priority position=top
+2026-08-21T21:34:46Z	JuruSysadmin	estimate	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	5
+2026-08-21T21:34:46Z	JuruSysadmin	started	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	Implementação frontend em feat/treatment-lifecycle-state; estado único e sincronização realtime, sem ações ou layout.
+2026-08-21T21:42:48Z	JuruSysadmin	delivered	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	Código e gates locais concluídos; aguardando revisão humana.
+2026-08-21T21:48:56Z	JuruSysadmin	started	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	Revisão humana: tornar o teste de reconnect um teste real do parser, usar payload completo de unassigned e cobrir snapshots inválidos/eventos parciais.
+2026-08-21T21:50:52Z	JuruSysadmin	delivered	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	Feedback de revisão incorporado; aguardando nova revisão humana.
+2026-08-21T21:57:46Z	JuruSysadmin	created	tratativas-infra/Implementar-aes-de-ownership-da-Tratativa-no-frontend.md	target=priority position=top
+2026-08-21T21:58:24Z	JuruSysadmin	estimate	tratativas-infra/Implementar-aes-de-ownership-da-Tratativa-no-frontend.md	8
+2026-08-21T21:58:24Z	JuruSysadmin	started	tratativas-infra/Implementar-aes-de-ownership-da-Tratativa-no-frontend.md	Implementação frontend em feat/treatment-ownership-actions; comandos Phoenix sem optimistic update e eventos realtime como fonte de estado.
+2026-08-21T23:29:08Z	JuruSysadmin	created	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	target=priority position=top
+2026-08-21T23:29:44Z	JuruSysadmin	started	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	
+2026-08-21T23:37:14Z	JuruSysadmin	delivered	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	
+2026-08-21T23:42:55Z	JuruSysadmin	started	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	Reabrir para incorporar regressões solicitadas no review humano
+2026-08-21T23:45:46Z	JuruSysadmin	delivered	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	Regressões do review implementadas e verificadas; aguardando aceitação humana.
+2026-08-21T23:49:09Z	JuruSysadmin	started	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	Refatorar os tipos dos hooks para módulo compartilhado, sem alterar comportamento
+2026-08-21T23:52:31Z	JuruSysadmin	delivered	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	Tipos centralizados e verificação concluída; aguardando revisão humana.
+2026-08-22T01:05:55Z	JuruSysadmin	delivered	tratativas-infra/Implementar-aes-de-ownership-da-Tratativa-no-frontend.md	Revisão humana concluída. Implementação, testes focados, typecheck, lint, build e diff check verificados; falhas restantes da suíte completa foram registradas como não relacionadas.
+2026-08-22T01:13:41Z	JuruSysadmin	created	tratativas-infra/Aplicar-matriz-de-aes-de-ownership-por-identidade-e-estado.md	target=priority position=top
+2026-08-22T01:14:21Z	JuruSysadmin	started	tratativas-infra/Aplicar-matriz-de-aes-de-ownership-por-identidade-e-estado.md	Início da implementação da matriz RED-01 a RED-06 com fail closed e sem alterar autorização do backend.
+2026-08-22T01:28:09Z	JuruSysadmin	delivered	tratativas-infra/Aplicar-matriz-de-aes-de-ownership-por-identidade-e-estado.md	Aprovada em revisão humana; implementação e verificações concluídas.
+2026-08-22T01:31:12Z	JuruSysadmin	created	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	target=priority position=top
+2026-08-22T01:31:46Z	JuruSysadmin	started	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Branch frontend aberta para implementar o cabeçalho da Tratativa e integrar a UI de ownership existente.
+2026-08-22T02:36:40Z	JuruSysadmin	delivered	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Implementação e verificações concluídas; aguardando revisão humana e deploy.
+2026-08-22T02:49:39Z	JuruSysadmin	started	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Revisão visual solicitada: status duplicado e header excessivamente espaçado.
+2026-08-22T02:51:46Z	JuruSysadmin	delivered	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Feedback visual implementado e verificado; aguardando nova revisão humana.
+2026-08-22T02:59:51Z	JuruSysadmin	started	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Aplicar melhorias visuais e de acessibilidade identificadas na revisão Carbon MCP.
+2026-08-22T03:05:17Z	JuruSysadmin	delivered	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Melhorias visuais e de acessibilidade implementadas e verificadas; aguardando revisão humana.
+2026-08-22T03:10:11Z	JuruSysadmin	started	tratativas-infra/Permitir-liberar-Tratativa.md	Expor a operação de domínio unassign pelo RoomChannel para completar o contrato usado pelo frontend.
+2026-08-22T03:14:43Z	JuruSysadmin	delivered	tratativas-infra/Permitir-liberar-Tratativa.md	Exposição Phoenix da liberação concluída e verificada; aguardando revisão humana.
+2026-08-22T13:35:22Z	JuruSysadmin	created	tratativas-infra/Estabilizar-contrato-realtime-de-resoluo-e-reabertura-da-Tratativa.md	target=priority position=top
+2026-08-22T13:37:13Z	JuruSysadmin	estimate	tratativas-infra/Estabilizar-contrato-realtime-de-resoluo-e-reabertura-da-Tratativa.md	2
+2026-08-22T16:11:23Z	JuruSysadmin	accepted	tratativas-infra/Corrigir-auditoria-e-contrato-do-PR-6.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:23Z	JuruSysadmin	accepted	tratativas-infra/Refatorar-payload-compartilhado-de-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Estabilizar-contrato-realtime-de-resoluo-e-reabertura-da-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Implementar-Treatment-Header-e-UI-de-ownership.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Aplicar-matriz-de-aes-de-ownership-por-identidade-e-estado.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Integrar-comandos-de-resoluo-no-useRoomChannel.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Implementar-aes-de-ownership-da-Tratativa-no-frontend.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Integrar-lifecycle-da-Tratativa-no-frontend.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Permitir-liberar-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Publicar-reabertura-da-Tratativa-em-realtime.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Expor-reabertura-da-Tratativa-via-Phoenix-Channel.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Permitir-reabrir-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Garantir-rollback-transacional-na-atribuicao-por-sala.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Publicar-resolucao-da-Tratativa-em-realtime.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Expor-resolucao-da-Tratativa-via-Phoenix-Channel.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Permitir-resolver-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Expandir-lifecycle-da-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Publicar-atribuio-do-agente-em-realtime.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Expor-Assumir-Tratativa-via-Phoenix-Channel.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Permitir-que-agente-assuma-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Adicionar-agente-responsavel-a-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Definir-matriz-de-permissoes-da-Tratativa.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Permitir-transferir-Tratativa-diretamente-para-outro-agente.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Expor-transferencia-da-Tratativa-via-Phoenix-Channel.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Publicar-transferencia-da-Tratativa-em-realtime.md	Aceita pelo PM: critérios e verificações concluídos.
+2026-08-22T16:28:27Z	JuruSysadmin	created	tratativas-infra/Disponibilizar-agentes-elegveis-para-transferncia-da-Tratativa.md	target=priority position=top
+2026-08-22T17:17:45Z	JuruSysadmin	accepted	tratativas-infra/Disponibilizar-agentes-elegveis-para-transferncia-da-Tratativa.md	Revisão humana concluída; story aceita pelo PM.

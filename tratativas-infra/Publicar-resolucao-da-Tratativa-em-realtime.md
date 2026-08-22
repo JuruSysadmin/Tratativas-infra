@@ -2,14 +2,15 @@
 title: Publicar resolucao da Tratativa em realtime
 type: feature
 created: "2026-08-21T13:59:15Z"
-modified: "2026-08-21T14:07:14Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 estimate: "2"
 tags: [backend, elixir, phoenix, channels, treatments, realtime, tdd]
 started: "2026-08-21T14:00:09Z"
 finished: "2026-08-21T14:07:14Z"
 delivered: "2026-08-21T14:07:14Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

@@ -4,12 +4,13 @@ type: feature
 estimate: 3
 tags: [backend, elixir, treatments, lifecycle, tdd]
 created: "2026-08-21T02:13:05Z"
-modified: "2026-08-21T02:30:18Z"
+modified: "2026-08-22T22:43:50Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T02:13:46Z"
 finished: "2026-08-21T02:30:18Z"
 delivered: "2026-08-21T02:30:18Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 # Expandir lifecycle da Tratativa
@@ -136,3 +137,6 @@ Feedback incorporado: contrato formal da matriz de assign_agent/2 adicionado ao 
 
 @JuruSysadmin 2026-08-21
 Revisão incorporada: o card agora documenta a matriz open sem agente → in_progress/ok; in_progress com mesmo agente → retry idempotente; in_progress com outro agente → already_assigned; resolved/closed com qualquer agente → invalid_status. Teste explícito cobre resolved e closed sem alterar atribuição. A matriz focada passou com 33 testes; mix format --check-formatted, mix precommit (464 testes) e git diff --check focado passaram. Não há reabertura implícita; reopen/2 ficará em story futura.
+
+@JuruSysadmin 2026-08-22
+Revisão independente adicional tratada: assign_agent/2 agora retorna invalid_status para qualquer agente quando a Treatment está resolved ou closed, inclusive agente diferente do responsável. Teste de regressão cobre ambos os agentes e os dois estados. Após o ajuste: 42 testes focados, precommit com 473 testes, Credo sem issues e diff staged limpo.

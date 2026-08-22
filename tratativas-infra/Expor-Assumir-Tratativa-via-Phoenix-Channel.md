@@ -2,12 +2,13 @@
 title: Expor Assumir Tratativa via Phoenix Channel
 type: feature
 created: "2026-08-21T01:23:50Z"
-modified: "2026-08-21T03:25:38Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T01:27:12Z"
 finished: "2026-08-21T03:25:38Z"
 delivered: "2026-08-21T03:25:38Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 # Expor Assumir Tratativa via Phoenix Channel

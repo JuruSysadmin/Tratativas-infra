@@ -4,12 +4,13 @@ type: feature
 estimate: 1
 tags: [backend, elixir, authorization, treatments]
 created: "2026-08-20T22:16:37Z"
-modified: "2026-08-20T22:19:59Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-20T22:19:32Z"
-finished: "2026-08-20T22:19:59Z"
-delivered: "2026-08-20T22:19:59Z"
+finished: "2026-08-20T22:32:24Z"
+delivered: "2026-08-20T22:32:24Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement
@@ -85,8 +86,17 @@ Proxima story: adicionar agente responsavel a Tratativa.
 - [x] Executar `mix test` e `mix precommit`.
 - [x] Revisar os criterios de aceitacao e entregar para revisao humana.
 
+- [x] Adicionar teste para role nil cobrindo allowed?/2 e authorize/2.
+- [x] Adicionar teste para argumentos invalidos (usuario nil e permissao nil).
+- [x] Melhorar o teste do logistics_agent para indicar qual permissao falhou.
 ## Comments
 @JuruSysadmin 2026-08-20
 Implementado em Chat.Treatments.Authorization. commercial possui somente treatment.reopen; logistics_agent possui assign, resolve, reopen e unassign. Papeis e permissoes desconhecidos retornam {:error, :forbidden}. Testes focados: 6 passaram; mix precommit: 440 testes passaram e Credo sem issues. Commit 639264b publicado em feat/centralize-treatment-authorization.
+
+@JuruSysadmin 2026-08-20
+Revisao: adicionar cobertura explicita para role nil e entradas invalidas; melhorar o teste do logistics_agent para identificar a permissao que falhar. Apos esses ajustes, a story pode seguir para aceite e a proxima story pode tratar assigned_agent na Treatment.
+
+@JuruSysadmin 2026-08-20
+Feedback tratado: adicionados testes para role nil em allowed?/2 e authorize/2, argumentos inválidos (usuário nil e permissão nil), e mensagem diagnóstica no teste do logistics_agent. Os novos testes passaram; mix precommit passou com 442 testes.
 
 ## Attachments

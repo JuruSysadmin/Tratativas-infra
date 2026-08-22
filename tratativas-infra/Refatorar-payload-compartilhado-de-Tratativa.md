@@ -4,7 +4,7 @@ type: chore
 estimate: 1
 tags: [backend, elixir, phoenix, refactor, treatments]
 created: "2026-08-21T20:35:25Z"
-modified: "2026-08-21T20:46:14Z"
+modified: "2026-08-22T16:11:23Z"
 author: JuruSysadmin
 status: accepted
 started: "2026-08-21T20:45:21Z"

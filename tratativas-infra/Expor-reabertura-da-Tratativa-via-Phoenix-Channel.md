@@ -3,11 +3,12 @@ title: Expor reabertura da Tratativa via Phoenix Channel
 type: feature
 estimate: 2
 tags: [backend, elixir, phoenix, channels, treatments, tdd]
-status: delivered
-modified: "2026-08-21T16:15:15Z"
+status: accepted
+modified: "2026-08-22T16:11:47Z"
 started: "2026-08-21T15:58:56Z"
 finished: "2026-08-21T16:15:15Z"
 delivered: "2026-08-21T16:15:15Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

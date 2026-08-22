@@ -2,12 +2,13 @@
 title: Permitir que agente assuma Tratativa
 type: feature
 created: "2026-08-21T00:59:00Z"
-modified: "2026-08-21T01:12:14Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T01:06:28Z"
 finished: "2026-08-21T01:12:14Z"
 delivered: "2026-08-21T01:12:14Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 # Permitir que agente assuma Tratativa

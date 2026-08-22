@@ -3,11 +3,12 @@ title: Permitir transferir Tratativa diretamente para outro agente
 type: feature
 estimate: 3
 tags: [backend, elixir, treatments, authorization, audit, concurrency, tdd]
-status: delivered
-modified: "2026-08-21T19:25:38Z"
+status: accepted
+modified: "2026-08-22T16:11:47Z"
 started: "2026-08-21T19:16:30Z"
 finished: "2026-08-21T19:23:57Z"
 delivered: "2026-08-21T19:23:57Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

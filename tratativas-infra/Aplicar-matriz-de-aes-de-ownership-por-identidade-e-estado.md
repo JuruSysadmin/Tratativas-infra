@@ -4,12 +4,13 @@ type: feature
 estimate: "3"
 tags: [frontend, chat, treatments, authorization, ux]
 created: "2026-08-22T01:13:41Z"
-modified: "2026-08-22T01:28:09Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-22T01:14:21Z"
 finished: "2026-08-22T01:28:09Z"
 delivered: "2026-08-22T01:28:09Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

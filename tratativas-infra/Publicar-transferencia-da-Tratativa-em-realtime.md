@@ -4,12 +4,13 @@ type: feature
 estimate: 2
 tags: [backend, elixir, phoenix, channels, treatments, realtime, tdd]
 created: "2026-08-21T20:21:30Z"
-modified: "2026-08-21T20:25:45Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 started: "2026-08-21T20:22:02Z"
 finished: "2026-08-21T20:25:29Z"
 delivered: "2026-08-21T20:25:29Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement

@@ -2,14 +2,15 @@
 title: Expor resolucao da Tratativa via Phoenix Channel
 type: feature
 created: "2026-08-21T12:43:02Z"
-modified: "2026-08-21T12:54:03Z"
+modified: "2026-08-22T16:11:47Z"
 author: JuruSysadmin
-status: delivered
+status: accepted
 estimate: "2"
 tags: [backend, elixir, phoenix, channels, treatments, tdd]
 started: "2026-08-21T12:44:13Z"
 finished: "2026-08-21T12:53:51Z"
 delivered: "2026-08-21T12:53:51Z"
+accepted: "2026-08-22T16:11:47Z"
 ---
 
 ## Problem statement
