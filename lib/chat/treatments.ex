@@ -165,6 +165,20 @@ defmodule Chat.Treatments do
     Repo.preload(treatment, :assigned_agent)
   end
 
+  @doc """
+  Lists active treatments accessible to the given user.
+  """
+  def list_queue(%User{} = user) do
+    from(t in Treatment,
+      join: r in assoc(t, :room),
+      join: m in assoc(r, :members),
+      where: m.id == ^user.id,
+      preload: [:room, :assigned_agent],
+      order_by: [desc: t.inserted_at]
+    )
+    |> Repo.all()
+  end
+
   defp open_or_reopen(room, order_id, user_id) do
     case Repo.get_by(Treatment, order_id: order_id) do
       nil -> create_treatment(room.id, order_id, user_id)
