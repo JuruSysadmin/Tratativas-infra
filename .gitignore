@@ -30,6 +30,10 @@ chat-*.tar
 # Local AI assistant configuration.
 /.claude/
 /.cursor/
+/CLAUDE.md
+
+# Local Codacy CLI state and generated rule cache.
+/.codacy/
 
 # Environment variables
 .env

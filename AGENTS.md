@@ -215,3 +215,24 @@ custom classes must fully style the input
 <!-- postgres-end -->
 
 <!-- usage-rules-end -->
+
+## Agile Markdown Workflow
+
+Before changing application code, Hermes must read the `tratativas-infra` backlog:
+
+```bash
+am show priority
+am show icebox
+```
+
+Before implementation, create or update the relevant story and record its concrete
+work as unchecked tasks under `## Tasks`. Work should follow this order:
+
+1. Read the story and its acceptance criteria.
+2. Add the implementation, test, and verification tasks to the story.
+3. Mark the story as started before coding.
+4. Mark each task done as the work is completed.
+5. Mark the story as delivered when the acceptance criteria are ready for review.
+
+Do not begin untracked implementation when the change belongs in the backlog. The
+backlog path is `tratativas-infra/` relative to this project root.
