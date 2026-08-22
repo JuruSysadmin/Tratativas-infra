@@ -4,7 +4,7 @@ type: feature
 estimate: "3"
 tags: [frontend, chat, treatments, carbon, ownership]
 created: "2026-08-22T01:30:00Z"
-modified: "2026-08-22T01:31:46Z"
+modified: "2026-08-22T01:56:27Z"
 author: JuruSysadmin
 status: started
 started: "2026-08-22T01:31:46Z"
@@ -47,14 +47,16 @@ duplicar autorização ou alterar estado de forma otimista.
 
 ## Tasks
 
-- [ ] Mapear o contrato visual atual do `CarbonAiChatPanel` e `TreatmentState`.
-- [ ] Escrever testes RED do `TreatmentHeader` para status e responsável.
-- [ ] Implementar o componente usando Carbon e composição.
-- [ ] Integrar `TreatmentOwnershipActions` ao header sem duplicar comandos.
-- [ ] Cobrir estados sem responsável, pending, erro e atualização realtime.
-- [ ] Executar testes focados, TypeScript, lint, build e diff check.
+- [x] Mapear o contrato visual atual do `CarbonAiChatPanel` e `TreatmentState`.
+- [x] Escrever testes RED do `TreatmentHeader` para status e responsável.
+- [x] Implementar o componente usando Carbon e composição.
+- [x] Integrar `TreatmentOwnershipActions` ao header sem duplicar comandos.
+- [x] Cobrir estados sem responsável, pending, erro e atualização realtime.
+- [x] Executar testes focados, TypeScript, lint, build e diff check.
 - [ ] Marcar como delivered e aguardar revisão humana.
 
 ## Comments
+@JuruSysadmin 2026-08-22
+Implementação concluída na branch feat/treatment-header-ownership-ui. O CarbonAiChatPanel agora usa TreatmentHeader com pedido, protocolo, status Carbon IconIndicator, responsável e TreatmentOwnershipActions. A matriz de capabilities existente permanece responsável pela visibilidade das ações; transferAgents é opcional e não é inventado. Eventos realtime continuam atualizando TreatmentState, que alimenta o header. Testes focados: 34 passando em 5 arquivos; npx tsc -b, npm run lint -- --quiet, npm run build e git diff --check passaram. Build mantém apenas avisos preexistentes de @position-try, chunks grandes e eval em dependências. Story permanece started aguardando revisão humana.
 
 ## Attachments
