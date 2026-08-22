@@ -4,10 +4,12 @@ type: feature
 estimate: "3"
 tags: [frontend, chat, treatments, authorization, ux]
 created: "2026-08-22T01:13:41Z"
-modified: "2026-08-22T01:18:52Z"
+modified: "2026-08-22T01:28:09Z"
 author: JuruSysadmin
-status: started
+status: delivered
 started: "2026-08-22T01:14:21Z"
+finished: "2026-08-22T01:28:09Z"
+delivered: "2026-08-22T01:28:09Z"
 ---
 
 ## Problem statement
@@ -58,10 +60,13 @@ contrato já existente da UI.
 - [x] Atualizar testes de renderização para a visibilidade correta dos botões.
 - [x] Confirmar que comandos e eventos realtime permanecem inalterados.
 - [x] Executar testes focados, TypeScript, lint, build e diff check.
-- [ ] Marcar como delivered e aguardar revisão humana.
+- [x] Marcar como delivered e aguardar revisão humana.
 
 ## Comments
 @JuruSysadmin 2026-08-22
 Implementação concluída na branch feat/treatment-ownership-capabilities. Criada função pura de capacidades com validação Zod da identidade e fail closed. RED-01 a RED-06 cobertos; 17 testes da matriz/componente e 32 testes focados passaram. npx tsc -b, ESLint dos arquivos afetados, bun run build e git diff --check passaram. Build mantém apenas avisos preexistentes de @position-try, chunks grandes e eval em dependências. Story permanece started aguardando revisão humana.
+
+@JuruSysadmin 2026-08-22
+Revisão humana aprovada. A matriz RED-01 a RED-06 foi validada e a implementação está pronta para entrega.
 
 ## Attachments
