@@ -123,6 +123,44 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert %{"error" => "invalid_cursor"} = json_response(conn, 400)
   end
 
+  test "filters queue by search query matching order_id or protocol", %{
+    conn: conn,
+    agent: agent,
+    treatment_1: treatment_1,
+    treatment_2: _treatment_2
+  } do
+    # Search by exact order_id
+    conn_order =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"search" => "9998044301"})
+
+    assert %{"items" => items_order} = json_response(conn_order, 200)
+    assert length(items_order) == 1
+    assert List.first(items_order)["order_id"] == 9_998_044_301
+
+    # Search by partial order_id
+    conn_partial =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"search" => "44302"})
+
+    assert %{"items" => items_partial} = json_response(conn_partial, 200)
+    assert length(items_partial) == 1
+    assert List.first(items_partial)["order_id"] == 9_998_044_302
+
+    # Search by protocol
+    protocol = Treatments.protocol(treatment_1)
+    conn_proto =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"search" => protocol})
+
+    assert %{"items" => items_proto} = json_response(conn_proto, 200)
+    assert length(items_proto) == 1
+    assert List.first(items_proto)["treatment_id"] == treatment_1.id
+  end
+
   test "requires authentication for the queue route", %{conn: conn} do
     conn = get(conn, ~p"/api/treatments/queue")
 

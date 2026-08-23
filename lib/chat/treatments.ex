@@ -196,6 +196,10 @@ defmodule Chat.Treatments do
   def list_queue(%User{} = user, opts \\ %{}) do
     with {:ok, limit} <- parse_queue_limit(get_opt(opts, :limit)),
          {:ok, cursor} <- decode_queue_cursor(get_opt(opts, :cursor)) do
+      search = get_opt(opts, :search)
+      status = get_opt(opts, :status)
+      mine = get_opt(opts, :mine) || get_opt(opts, :assigned_to_me)
+
       base_query =
         from(t in Treatment,
           join: r in assoc(t, :room),
@@ -204,6 +208,9 @@ defmodule Chat.Treatments do
           preload: [:room, :assigned_agent],
           order_by: [desc: t.inserted_at, desc: t.id]
         )
+        |> maybe_filter_queue_status(status)
+        |> maybe_filter_queue_mine(mine, user.id)
+        |> maybe_filter_queue_search(search)
 
       query =
         if cursor do
@@ -246,6 +253,59 @@ defmodule Chat.Treatments do
        }}
     end
   end
+
+  defp maybe_filter_queue_status(query, status) when status in ["open", "in_progress", "resolved", "closed"] do
+    from(t in query, where: t.status == ^status)
+  end
+
+  defp maybe_filter_queue_status(query, _), do: query
+
+  defp maybe_filter_queue_mine(query, mine, user_id) when mine in [true, "true", "1"] do
+    from(t in query, where: t.assigned_agent_id == ^user_id)
+  end
+
+  defp maybe_filter_queue_mine(query, _mine, _user_id), do: query
+
+  defp maybe_filter_queue_search(query, nil), do: query
+  defp maybe_filter_queue_search(query, ""), do: query
+
+  defp maybe_filter_queue_search(query, search_term) when is_binary(search_term) do
+    trimmed = String.trim(search_term)
+    if trimmed == "" do
+      query
+    else
+      clean_term =
+        trimmed
+        |> String.replace(~r/^trat-?/i, "")
+        |> String.replace_leading("0", "")
+
+      case Integer.parse(trimmed) do
+        {order_or_num, ""} ->
+          from(t in query,
+            where:
+              fragment("CAST(? AS TEXT) LIKE ?", t.order_id, ^"%#{trimmed}%") or
+                t.protocol_number == ^order_or_num
+          )
+
+        _ ->
+          case Integer.parse(clean_term) do
+            {proto_num, ""} ->
+              from(t in query,
+                where:
+                  fragment("CAST(? AS TEXT) LIKE ?", t.order_id, ^"%#{trimmed}%") or
+                    t.protocol_number == ^proto_num
+              )
+
+            _ ->
+              from(t in query,
+                where: fragment("CAST(? AS TEXT) LIKE ?", t.order_id, ^"%#{trimmed}%")
+              )
+          end
+      end
+    end
+  end
+
+  defp maybe_filter_queue_search(query, _), do: query
 
   def encode_queue_cursor(%Treatment{inserted_at: inserted_at, id: id}) do
     inserted_at_str = DateTime.to_iso8601(inserted_at)
