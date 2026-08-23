@@ -19,7 +19,9 @@ defmodule ChatWeb.TreatmentQueueController do
               protocol: Treatments.protocol(t),
               status: t.status,
               assigned_agent_id: t.assigned_agent_id,
-              assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil)
+              assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil),
+              inserted_at: t.inserted_at,
+              assigned_at: t.assigned_at
             }
           end)
 
