@@ -31,7 +31,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     }
   end
 
-  test "returns 200 with queue items accessible to the agent", %{
+  test "returns 200 with queue items and pagination metadata", %{
     conn: conn,
     agent: agent,
     room_1: room_1,
@@ -42,7 +42,15 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
       |> assign(:current_user, agent)
       |> TreatmentQueueController.index(%{})
 
-    assert %{"items" => items} = json_response(conn, 200)
+    assert %{
+             "items" => items,
+             "pagination" => %{
+               "has_more" => false,
+               "next_cursor" => nil,
+               "limit" => 50
+             }
+           } = json_response(conn, 200)
+
     assert length(items) >= 2
 
     room_ids = Enum.map(items, & &1["room_id"])
@@ -56,6 +64,63 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert Map.has_key?(first_item, "status")
     assert Map.has_key?(first_item, "assigned_agent_id")
     assert Map.has_key?(first_item, "assigned_agent_name")
+  end
+
+  test "paginates results with custom limit and keyset cursor", %{
+    conn: conn,
+    agent: agent
+  } do
+    # Page 1 (limit 1)
+    conn_page_1 =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"limit" => "1"})
+
+    assert %{
+             "items" => [page_1_item],
+             "pagination" => %{
+               "has_more" => true,
+               "next_cursor" => next_cursor,
+               "limit" => 1
+             }
+           } = json_response(conn_page_1, 200)
+
+    assert is_binary(next_cursor) and next_cursor != ""
+
+    # Page 2 (with cursor from page 1)
+    conn_page_2 =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"limit" => "1", "cursor" => next_cursor})
+
+    assert %{
+             "items" => [page_2_item],
+             "pagination" => %{
+               "limit" => 1
+             }
+           } = json_response(conn_page_2, 200)
+
+    assert page_1_item["treatment_id"] != page_2_item["treatment_id"]
+  end
+
+  test "returns 400 when limit is invalid", %{conn: conn, agent: agent} do
+    for invalid_limit <- ["0", "101", "-5", "abc"] do
+      conn_test =
+        conn
+        |> assign(:current_user, agent)
+        |> TreatmentQueueController.index(%{"limit" => invalid_limit})
+
+      assert %{"error" => "invalid_limit"} = json_response(conn_test, 400)
+    end
+  end
+
+  test "returns 400 when cursor is invalid", %{conn: conn, agent: agent} do
+    conn =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"cursor" => "invalid_not_base64"})
+
+    assert %{"error" => "invalid_cursor"} = json_response(conn, 400)
   end
 
   test "requires authentication for the queue route", %{conn: conn} do

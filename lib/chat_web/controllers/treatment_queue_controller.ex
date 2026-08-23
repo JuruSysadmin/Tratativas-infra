@@ -5,23 +5,35 @@ defmodule ChatWeb.TreatmentQueueController do
 
   alias Chat.Treatments
 
-  def index(conn, _params) do
+  def index(conn, params) do
     user = conn.assigns.current_user
-    treatments = Treatments.list_queue(user)
 
-    items =
-      Enum.map(treatments, fn t ->
-        %{
-          room_id: t.room_id,
-          order_id: t.order_id,
-          treatment_id: t.id,
-          protocol: Treatments.protocol(t),
-          status: t.status,
-          assigned_agent_id: t.assigned_agent_id,
-          assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil)
-        }
-      end)
+    case Treatments.list_queue(user, params) do
+      {:ok, %{items: treatments, pagination: pagination}} ->
+        items =
+          Enum.map(treatments, fn t ->
+            %{
+              room_id: t.room_id,
+              order_id: t.order_id,
+              treatment_id: t.id,
+              protocol: Treatments.protocol(t),
+              status: t.status,
+              assigned_agent_id: t.assigned_agent_id,
+              assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil)
+            }
+          end)
 
-    json(conn, %{items: items})
+        json(conn, %{items: items, pagination: pagination})
+
+      {:error, :invalid_limit} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "invalid_limit", message: "limit must be an integer between 1 and 100"})
+
+      {:error, :invalid_cursor} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "invalid_cursor", message: "cursor is invalid"})
+    end
   end
 end

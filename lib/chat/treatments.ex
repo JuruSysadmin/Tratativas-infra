@@ -187,17 +187,108 @@ defmodule Chat.Treatments do
   end
 
   @doc """
-  Lists active treatments accessible to the given user.
+  Lists active treatments accessible to the given user with keyset cursor pagination.
+
+  Supported options:
+  - `:limit` or `"limit"`: Integer between 1 and 100 (defaults to 50).
+  - `:cursor` or `"cursor"`: Keyset cursor string generated from previous page.
   """
-  def list_queue(%User{} = user) do
-    from(t in Treatment,
-      join: r in assoc(t, :room),
-      join: m in assoc(r, :members),
-      where: m.id == ^user.id,
-      preload: [:room, :assigned_agent],
-      order_by: [desc: t.inserted_at]
-    )
-    |> Repo.all()
+  def list_queue(%User{} = user, opts \\ %{}) do
+    with {:ok, limit} <- parse_queue_limit(get_opt(opts, :limit)),
+         {:ok, cursor} <- decode_queue_cursor(get_opt(opts, :cursor)) do
+      base_query =
+        from(t in Treatment,
+          join: r in assoc(t, :room),
+          join: m in assoc(r, :members),
+          where: m.id == ^user.id,
+          preload: [:room, :assigned_agent],
+          order_by: [desc: t.inserted_at, desc: t.id]
+        )
+
+      query =
+        if cursor do
+          from(t in base_query,
+            where:
+              t.inserted_at < ^cursor.inserted_at or
+                (t.inserted_at == ^cursor.inserted_at and t.id < ^cursor.id)
+          )
+        else
+          base_query
+        end
+
+      results =
+        query
+        |> limit(^(limit + 1))
+        |> Repo.all()
+
+      {items, has_more} =
+        if length(results) > limit do
+          {Enum.take(results, limit), true}
+        else
+          {results, false}
+        end
+
+      next_cursor =
+        if has_more and List.last(items) do
+          encode_queue_cursor(List.last(items))
+        else
+          nil
+        end
+
+      {:ok,
+       %{
+         items: items,
+         pagination: %{
+           has_more: has_more,
+           next_cursor: next_cursor,
+           limit: limit
+         }
+       }}
+    end
+  end
+
+  def encode_queue_cursor(%Treatment{inserted_at: inserted_at, id: id}) do
+    inserted_at_str = DateTime.to_iso8601(inserted_at)
+    Base.url_encode64("#{inserted_at_str}|#{id}", padding: false)
+  end
+
+  def decode_queue_cursor(nil), do: {:ok, nil}
+  def decode_queue_cursor(""), do: {:ok, nil}
+
+  def decode_queue_cursor(cursor_str) when is_binary(cursor_str) do
+    with {:ok, decoded} <- Base.url_decode64(cursor_str, padding: false),
+         [inserted_at_str, id] <- String.split(decoded, "|", parts: 2),
+         {:ok, datetime, _offset} <- DateTime.from_iso8601(inserted_at_str),
+         {:ok, id} <- Ecto.UUID.cast(id) do
+      {:ok, %{inserted_at: datetime, id: id}}
+    else
+      _ -> {:error, :invalid_cursor}
+    end
+  end
+
+  def decode_queue_cursor(_), do: {:error, :invalid_cursor}
+
+  def parse_queue_limit(nil), do: {:ok, 50}
+  def parse_queue_limit(""), do: {:ok, 50}
+
+  def parse_queue_limit(limit) when is_integer(limit) do
+    cond do
+      limit < 1 or limit > 100 -> {:error, :invalid_limit}
+      true -> {:ok, limit}
+    end
+  end
+
+  def parse_queue_limit(limit_str) when is_binary(limit_str) do
+    case Integer.parse(limit_str) do
+      {limit, ""} when limit >= 1 and limit <= 100 -> {:ok, limit}
+      _ -> {:error, :invalid_limit}
+    end
+  end
+
+  def parse_queue_limit(_), do: {:error, :invalid_limit}
+
+  defp get_opt(opts, key) when is_map(opts) do
+    Map.get(opts, key) || Map.get(opts, to_string(key))
   end
 
   defp validate_transfer_listing_state(
