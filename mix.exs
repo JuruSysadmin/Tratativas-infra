@@ -70,6 +70,8 @@ defmodule Chat.MixProject do
       {:tzdata, "~> 1.1"},
       {:ok, "~> 2.3"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.15", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: [:test]}
     ]
   end
@@ -86,8 +88,13 @@ defmodule Chat.MixProject do
         "compile --warnings-as-errors",
         "deps.unlock --unused",
         "format",
-        "credo --strict",
+        "quality",
         "test"
+      ],
+      quality: [
+        "credo --strict",
+        "dialyzer",
+        "sobelow --exit"
       ]
     ]
   end

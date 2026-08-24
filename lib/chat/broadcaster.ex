@@ -169,6 +169,16 @@ defmodule Chat.Broadcaster do
       log_failure("membership_left", [user_id: user_id], inspect(reason))
   end
 
+  def broadcast_treatment_assigned(room_id, payload, opts \\ []) do
+    broadcast(
+      room_id,
+      {:treatment_assigned, payload},
+      "treatment_assigned",
+      [room_id: room_id, treatment_id: payload.treatment_id],
+      opts
+    )
+  end
+
   defp broadcast(room_id, event, event_name, metadata, opts) do
     pubsub = Keyword.get(opts, :pubsub, Phoenix.PubSub)
 

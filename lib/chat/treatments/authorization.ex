@@ -14,11 +14,12 @@ defmodule Chat.Treatments.Authorization do
     "treatment.resolve",
     "treatment.reopen",
     "treatment.unassign",
-    "treatment.transfer"
+    "treatment.transfer",
+    "treatment.preview"
   ]
 
   @role_permissions %{
-    "commercial" => ["treatment.reopen"],
+    "commercial" => ["treatment.confirm_resolution", "treatment.reopen"],
     "logistics_agent" => @permissions
   }
 
@@ -37,4 +38,38 @@ defmodule Chat.Treatments.Authorization do
   def authorize(user, permission) do
     if allowed?(user, permission), do: :ok, else: {:error, :forbidden}
   end
+
+  @doc "Separates room membership reading access from operational access."
+  def authorize_room_action(%User{}, _assigned_agent_id, :read, member?) do
+    if member?, do: :ok, else: {:error, :forbidden}
+  end
+
+  def authorize_room_action(%User{} = user, assigned_agent_id, action, member?)
+      when action in [:write, :lifecycle] do
+    cond do
+      not member? -> {:error, :forbidden}
+      user.role == "commercial" -> :ok
+      user.role == "logistics_agent" and user.id == assigned_agent_id -> :ok
+      user.role == "logistics_agent" -> {:error, :not_assigned_agent}
+      true -> {:error, :forbidden}
+    end
+  end
+
+  def authorize_room_action(_user, _assigned_agent_id, _action, _member?),
+    do: {:error, :forbidden}
+
+  def authorize_current_operator(%User{} = user, assigned_agent_id) do
+    cond do
+      user.role == "commercial" -> :ok
+      user.role == "logistics_agent" and user.id == assigned_agent_id -> :ok
+      user.role == "logistics_agent" -> {:error, :not_assigned_agent}
+      true -> {:error, :forbidden}
+    end
+  end
+
+  def authorize_current_operator(_user, _assigned_agent_id), do: {:error, :forbidden}
+
+  @doc "Returns whether a user can claim an unassigned open Treatment."
+  def eligible_for_assignment?(%User{role: "logistics_agent"}, "open", nil), do: true
+  def eligible_for_assignment?(_user, _status, _assigned_agent_id), do: false
 end

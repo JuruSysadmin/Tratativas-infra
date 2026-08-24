@@ -77,6 +77,11 @@ defmodule ChatWeb.RoomChannel do
     {:noreply, socket}
   end
 
+  def handle_info({:treatment_assigned, payload}, socket) do
+    push(socket, "treatment:agent_assigned", payload)
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_in(
         "message:new",
@@ -99,6 +104,9 @@ defmodule ChatWeb.RoomChannel do
 
       {:error, :treatment_closed} ->
         {:reply, {:error, %{reason: "treatment_closed"}}, socket}
+
+      {:error, :forbidden} ->
+        {:reply, {:error, %{reason: "forbidden"}}, socket}
 
       {:error, :invalid_client_id} ->
         {:reply, {:error, %{reason: "invalid_client_id"}}, socket}
@@ -250,6 +258,25 @@ defmodule ChatWeb.RoomChannel do
     end
   end
 
+  def handle_in("treatment:confirm_resolution", _params, socket) do
+    case Treatments.confirm_resolution_for_room(
+           socket.assigns.room_id,
+           socket.assigns.current_user
+         ) do
+      {:ok, closed_treatment, :closed} ->
+        treatment = Treatments.preload_for_presentation(closed_treatment)
+        payload = treatment_lifecycle_payload(treatment)
+        broadcast!(socket, "treatment:closed", payload)
+        {:reply, {:ok, payload}, socket}
+
+      {:error, reason} when reason in [:forbidden, :not_found, :invalid_status] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_confirmation_failed"}}, socket}
+    end
+  end
+
   def handle_in("treatment:transfer", %{"target_agent_id" => target_agent_id}, socket) do
     result =
       Treatments.transfer_agent_for_room(
@@ -346,7 +373,9 @@ defmodule ChatWeb.RoomChannel do
       assigned_agent_username: assigned_agent_username(treatment),
       assigned_at: treatment.assigned_at,
       resolved_by_id: treatment.resolved_by_id,
-      resolved_at: treatment.resolved_at
+      resolved_at: treatment.resolved_at,
+      closed_by_id: treatment.closed_by_id,
+      closed_at: treatment.closed_at
     }
   end
 

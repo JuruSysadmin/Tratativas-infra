@@ -140,3 +140,11 @@
 2026-08-22T16:11:47Z	JuruSysadmin	accepted	tratativas-infra/Publicar-transferencia-da-Tratativa-em-realtime.md	Aceita pelo PM: critérios e verificações concluídos.
 2026-08-22T16:28:27Z	JuruSysadmin	created	tratativas-infra/Disponibilizar-agentes-elegveis-para-transferncia-da-Tratativa.md	target=priority position=top
 2026-08-22T17:17:45Z	JuruSysadmin	accepted	tratativas-infra/Disponibilizar-agentes-elegveis-para-transferncia-da-Tratativa.md	Revisão humana concluída; story aceita pelo PM.
+2026-08-24T15:10:21Z	JuruSysadmin	chore	tratativas-infra/Adicionar-Credo-Dialyzer-e-Sobelow-ao-pipeline-de-qualidade.md	target=priority position=top
+2026-08-24T15:10:43Z	JuruSysadmin	started	tratativas-infra/Adicionar-Credo-Dialyzer-e-Sobelow-ao-pipeline-de-qualidade.md	Iniciando a instalação das ferramentas de qualidade solicitadas pelo PM.
+2026-08-24T15:15:06Z	JuruSysadmin	accepted	tratativas-infra/Adicionar-Credo-Dialyzer-e-Sobelow-ao-pipeline-de-qualidade.md	Dependências, aliases e lockfile implementados; validações executadas.
+2026-08-24T15:15:06Z	JuruSysadmin	accepted	tratativas-infra/Adicionar-Credo-Dialyzer-e-Sobelow-ao-pipeline-de-qualidade.md	História entregue para revisão humana; achados das ferramentas foram preservados e registrados.
+2026-08-24T15:31:04Z	JuruSysadmin	chore	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	target=priority position=top
+2026-08-24T15:31:25Z	JuruSysadmin	started	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	Iniciando a integração das ferramentas de qualidade ao GitHub Actions.
+2026-08-24T15:33:37Z	JuruSysadmin	accepted	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	Workflow atualizado e validações locais executadas.
+2026-08-24T15:33:37Z	JuruSysadmin	accepted	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	Integração entregue para revisão humana; os achados das ferramentas permanecem explícitos no CI.

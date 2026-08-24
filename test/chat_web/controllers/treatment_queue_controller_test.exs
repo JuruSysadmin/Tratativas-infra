@@ -18,9 +18,6 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert {:ok, %{treatment: treatment_2, room: room_2}} =
              Treatments.open_for_order(9_998_044_302, owner.id)
 
-    assert {:ok, _} = Rooms.join_room(agent.id, room_1.id)
-    assert {:ok, _} = Rooms.join_room(agent.id, room_2.id)
-
     %{
       owner: owner,
       agent: agent,
@@ -31,7 +28,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     }
   end
 
-  test "returns 200 with queue items and pagination metadata", %{
+  test "lists eligible open treatments for logistics without granting room membership", %{
     conn: conn,
     agent: agent,
     room_1: room_1,
@@ -53,6 +50,9 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
 
     assert length(items) >= 2
 
+    refute Rooms.room_member?(agent.id, room_1.id)
+    refute Rooms.room_member?(agent.id, room_2.id)
+
     room_ids = Enum.map(items, & &1["room_id"])
     assert room_1.id in room_ids
     assert room_2.id in room_ids
@@ -64,6 +64,34 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert Map.has_key?(first_item, "status")
     assert Map.has_key?(first_item, "assigned_agent_id")
     assert Map.has_key?(first_item, "assigned_agent_name")
+    assert first_item["can_assign"] == true
+    refute Map.has_key?(first_item, "messages")
+    refute Map.has_key?(first_item, "attachments")
+  end
+
+  test "lists only the current logistics agent's in-progress treatment", %{
+    conn: conn,
+    owner: owner,
+    agent: agent,
+    treatment_1: treatment_1,
+    treatment_2: treatment_2
+  } do
+    other_agent = logistics_agent_fixture("other-agent-queue")
+
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment_1, agent)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment_2, other_agent)
+
+    conn =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{})
+
+    assert %{"items" => [item]} = json_response(conn, 200)
+    assert item["treatment_id"] == treatment_1.id
+    assert item["assigned_agent_id"] == agent.id
+    assert item["can_assign"] == false
+    refute Rooms.room_member?(agent.id, treatment_2.room_id)
+    assert owner.id != agent.id
   end
 
   test "paginates results with custom limit and keyset cursor", %{
@@ -151,6 +179,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
 
     # Search by protocol
     protocol = Treatments.protocol(treatment_1)
+
     conn_proto =
       conn
       |> assign(:current_user, agent)

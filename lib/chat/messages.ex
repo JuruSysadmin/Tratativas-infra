@@ -20,7 +20,7 @@ defmodule Chat.Messages do
   alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Rooms.{Room, RoomMember}
-  alias Chat.Treatments.Treatment
+  alias Chat.Treatments.{Authorization, Treatment}
   alias Ecto.Multi
 
   def list_messages(room_id, opts \\ []) do
@@ -354,11 +354,11 @@ defmodule Chat.Messages do
     |> Multi.run(:locked_room, fn repo, _changes ->
       lock_room_for_mentions(repo, room_id)
     end)
-    |> Multi.run(:authorized_sender, fn repo, _changes ->
-      authorize_sender(repo, user_id, room_id)
-    end)
     |> Multi.run(:treatment_status, fn repo, _changes ->
       verify_treatment_active(repo, room_id)
+    end)
+    |> Multi.run(:authorized_sender, fn repo, _changes ->
+      authorize_sender(repo, user_id, room_id)
     end)
     |> Multi.insert(:message, changeset)
     |> Multi.run(:attachments, fn repo, %{message: message} ->
@@ -417,7 +417,7 @@ defmodule Chat.Messages do
        do: {:error, :treatment_closed}
 
   defp handle_insert_result(
-         {:error, :authorized_sender, :forbidden, _changes},
+         {:error, :authorized_sender, _reason, _changes},
          _client_id,
          _user_id,
          _room_id,
@@ -480,12 +480,34 @@ defmodule Chat.Messages do
   defp authorize_sender(repo, user_id, room_id) do
     query =
       from membership in RoomMember,
+        join: user in User,
+        on: user.id == membership.user_id,
+        left_join: treatment in Treatment,
+        on: treatment.room_id == membership.room_id,
         where: membership.user_id == ^user_id and membership.room_id == ^room_id,
-        lock: "FOR SHARE"
+        select: {user.role, treatment.id, treatment.assigned_agent_id, treatment.status}
 
     case repo.one(query) do
-      %RoomMember{} -> {:ok, :authorized}
-      nil -> {:error, :forbidden}
+      {_role, nil, _assigned_agent_id, nil} ->
+        {:ok, :authorized}
+
+      {_role, _treatment_id, _assigned_agent_id, status}
+      when status in ["resolved", "closed"] ->
+        {:error, :treatment_closed}
+
+      {role, _treatment_id, assigned_agent_id, _status} ->
+        case Authorization.authorize_room_action(
+               %User{id: user_id, role: role},
+               assigned_agent_id,
+               :write,
+               true
+             ) do
+          :ok -> {:ok, :authorized}
+          {:error, _reason} -> {:error, :forbidden}
+        end
+
+      nil ->
+        {:error, :forbidden}
     end
   rescue
     Ecto.Query.CastError -> {:error, :forbidden}
@@ -658,7 +680,7 @@ defmodule Chat.Messages do
     Repo.transaction(fn ->
       case authorize_sender(Repo, user_id, room_id) do
         {:ok, :authorized} -> existing_client_message(Repo, client_id, user_id, room_id, attrs)
-        {:error, :forbidden} -> {:error, :forbidden}
+        {:error, _reason} -> {:error, :forbidden}
       end
     end)
     |> case do
@@ -1142,6 +1164,9 @@ defmodule Chat.Messages do
           not Rooms.room_member?(user_id, room_id) ->
             {:error, :not_member}
 
+          not message_writer_authorized?(user_id, room_id) ->
+            {:error, :not_authorized}
+
           message.user_id != user_id ->
             {:error, :not_authorized}
 
@@ -1173,6 +1198,9 @@ defmodule Chat.Messages do
           not Rooms.room_member?(user_id, room_id) ->
             {:error, :not_member}
 
+          not message_writer_authorized?(user_id, room_id) ->
+            {:error, :not_authorized}
+
           message.user_id != user_id ->
             {:error, :not_authorized}
 
@@ -1183,6 +1211,13 @@ defmodule Chat.Messages do
               Keyword.get(opts, :broadcaster, Chat.Broadcaster)
             )
         end
+    end
+  end
+
+  defp message_writer_authorized?(user_id, room_id) do
+    case authorize_sender(Repo, user_id, room_id) do
+      {:ok, :authorized} -> true
+      _ -> false
     end
   end
 

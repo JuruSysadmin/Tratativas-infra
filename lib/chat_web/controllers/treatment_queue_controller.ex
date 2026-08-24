@@ -4,6 +4,7 @@ defmodule ChatWeb.TreatmentQueueController do
   use ChatWeb, :controller
 
   alias Chat.Treatments
+  alias Chat.Treatments.Authorization
 
   def index(conn, params) do
     user = conn.assigns.current_user
@@ -20,6 +21,12 @@ defmodule ChatWeb.TreatmentQueueController do
               status: t.status,
               assigned_agent_id: t.assigned_agent_id,
               assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil),
+              can_assign:
+                Authorization.eligible_for_assignment?(
+                  user,
+                  t.status,
+                  t.assigned_agent_id
+                ),
               inserted_at: t.inserted_at,
               assigned_at: t.assigned_at
             }

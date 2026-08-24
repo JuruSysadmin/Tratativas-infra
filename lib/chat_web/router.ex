@@ -64,7 +64,11 @@ defmodule ChatWeb.Router do
     pipe_through [:api, :auth]
 
     resources "/order-conversations", OrderConversationController, only: [:index, :create]
+    get "/treatment-intakes/:order_id", TreatmentIntakeController, :show
+    post "/treatment-intakes", TreatmentIntakeController, :create
     get "/treatments/queue", TreatmentQueueController, :index
+    post "/treatments/:treatment_id/assign-to-me", TreatmentAssignmentController, :create
+    get "/treatments/:treatment_id/preview", TreatmentPreviewController, :show
 
     resources "/rooms", RoomController, only: [:index, :create, :show, :delete] do
       post "/join", RoomController, :join

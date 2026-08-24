@@ -61,4 +61,38 @@ defmodule Chat.Treatments.AuthorizationTest do
     assert {:error, :forbidden} = Authorization.authorize(user, nil)
     refute Authorization.allowed?(user, nil)
   end
+
+  test "room access separates membership reading from operational responsibility" do
+    commercial = %User{id: "commercial", role: "commercial"}
+    current_agent = %User{id: "current", role: "logistics_agent"}
+    former_agent = %User{id: "former", role: "logistics_agent"}
+
+    assert :ok = Authorization.authorize_room_action(commercial, "other", :read, true)
+    assert :ok = Authorization.authorize_room_action(commercial, "other", :write, true)
+    assert :ok = Authorization.authorize_room_action(commercial, "other", :lifecycle, true)
+
+    assert :ok = Authorization.authorize_room_action(current_agent, current_agent.id, :read, true)
+
+    assert :ok =
+             Authorization.authorize_room_action(current_agent, current_agent.id, :write, true)
+
+    assert :ok =
+             Authorization.authorize_room_action(
+               current_agent,
+               current_agent.id,
+               :lifecycle,
+               true
+             )
+
+    assert :ok = Authorization.authorize_room_action(former_agent, "current", :read, true)
+
+    assert {:error, :not_assigned_agent} =
+             Authorization.authorize_room_action(former_agent, "current", :write, true)
+
+    assert {:error, :not_assigned_agent} =
+             Authorization.authorize_room_action(former_agent, "current", :lifecycle, true)
+
+    assert {:error, :forbidden} =
+             Authorization.authorize_room_action(current_agent, current_agent.id, :read, false)
+  end
 end

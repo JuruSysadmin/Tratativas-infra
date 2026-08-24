@@ -13,11 +13,15 @@ defmodule Chat.Treatments.Treatment do
     field :status, :string, default: "open"
     field :assigned_at, :utc_datetime_usec
     field :resolved_at, :utc_datetime_usec
+    field :closed_at, :utc_datetime_usec
 
     belongs_to :room, Chat.Rooms.Room
     belongs_to :opened_by, Chat.Accounts.User
     belongs_to :assigned_agent, Chat.Accounts.User
     belongs_to :resolved_by, Chat.Accounts.User
+    belongs_to :closed_by, Chat.Accounts.User
+    belongs_to :reason, Chat.Treatments.Reason, foreign_key: :treatment_reason_id
+    field :initial_description, :string
     has_many :audit_events, Chat.Treatments.AuditEvent
 
     timestamps(type: :utc_datetime_usec)
@@ -25,11 +29,19 @@ defmodule Chat.Treatments.Treatment do
 
   def changeset(treatment, attrs) do
     treatment
-    |> cast(attrs, [:order_id, :status, :room_id, :opened_by_id])
+    |> cast(attrs, [
+      :order_id,
+      :status,
+      :room_id,
+      :opened_by_id,
+      :treatment_reason_id,
+      :initial_description
+    ])
     |> validate_required([:order_id, :status, :room_id, :opened_by_id])
     |> validate_inclusion(:status, ["open", "in_progress", "resolved", "closed"])
     |> unique_constraint(:order_id)
     |> unique_constraint(:room_id)
+    |> foreign_key_constraint(:treatment_reason_id)
   end
 
   def assignment_changeset(treatment, attrs) do
@@ -64,5 +76,12 @@ defmodule Chat.Treatments.Treatment do
 
   def reopen_changeset(treatment) do
     change(treatment, %{status: "in_progress", resolved_by_id: nil, resolved_at: nil})
+  end
+
+  def closure_changeset(treatment, closed_by_id, closed_at) do
+    treatment
+    |> change(%{status: "closed", closed_by_id: closed_by_id, closed_at: closed_at})
+    |> validate_required([:closed_by_id, :closed_at])
+    |> foreign_key_constraint(:closed_by_id)
   end
 end

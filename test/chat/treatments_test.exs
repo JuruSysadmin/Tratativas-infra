@@ -29,11 +29,82 @@ defmodule Chat.TreatmentsTest do
     assert actor_id == user.id
   end
 
+  test "opens a treatment with a catalogued reason and initial description", %{user: user} do
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_structured_for_order(9_998_043_471, user.id, %{
+               reason_code: "delivery",
+               initial_description: "Pedido ainda nao foi entregue ao cliente."
+             })
+
+    assert treatment.status == "open"
+    assert treatment.assigned_agent_id == nil
+    assert treatment.room_id == room.id
+    assert treatment.reason.code == "delivery"
+    assert treatment.reason.label == "Entrega"
+    assert treatment.initial_description == "Pedido ainda nao foi entregue ao cliente."
+  end
+
+  test "reports a missing treatment with active intake reasons" do
+    assert {:missing, reasons} = Treatments.intake_state(9_998_043_469)
+
+    assert Enum.map(reasons, &{&1.code, &1.label}) == [
+             {"delivery", "Entrega"},
+             {"stock", "Estoque"},
+             {"billing", "Faturamento"},
+             {"product", "Produto"},
+             {"cancellation", "Cancelamento"},
+             {"divergence", "Divergência"},
+             {"other", "Outro"}
+           ]
+  end
+
   test "treatment can exist without an assigned agent", %{user: user} do
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_472, user.id)
 
     assert treatment.assigned_agent_id == nil
     assert treatment.assigned_at == nil
+  end
+
+  test "opening a closed treatment preserves its terminal state for an authorized member", %{
+    user: user
+  } do
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_045_010, user.id)
+
+    assert {:ok, closed} = Treatments.close(treatment, user.id)
+    assert closed.status == "closed"
+
+    assert {:ok, %{treatment: reopened, room: reopened_room}} =
+             Treatments.open_for_order(treatment.order_id, user.id)
+
+    assert reopened.id == treatment.id
+    assert reopened_room.id == room.id
+    assert reopened.status == "closed"
+    assert audit_event_count(treatment, user, "treatment_reopened") == 0
+  end
+
+  test "opening a closed treatment does not grant membership to an unauthorized user", %{
+    user: user
+  } do
+    {:ok, outsider} = Identity.sync_user(%{"sub" => "closed-treatment-outsider"}, %{})
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_045_011, user.id)
+
+    assert {:ok, _closed} = Treatments.close(treatment, user.id)
+    refute Rooms.room_member?(outsider.id, room.id)
+
+    assert {:error, :forbidden} = Treatments.open_for_order(treatment.order_id, outsider.id)
+    refute Rooms.room_member?(outsider.id, room.id)
+    assert audit_event_count(treatment, user, "treatment_reopened") == 0
+  end
+
+  test "closed treatment rejects another close operation", %{user: user} do
+    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_045_012, user.id)
+    assert {:ok, _closed} = Treatments.close(treatment, user.id)
+
+    assert {:error, :invalid_status} = Treatments.close(treatment, user.id)
+    assert audit_event_count(treatment, user, "treatment_closed") == 1
   end
 
   test "gets a treatment by room id", %{user: user} do
@@ -48,11 +119,16 @@ defmodule Chat.TreatmentsTest do
     agent = logistics_agent_fixture()
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_480, user.id)
 
+    assert Repo.get_by(Chat.Rooms.RoomMember, user_id: agent.id, room_id: treatment.room_id) ==
+             nil
+
     assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
 
     assert assigned.assigned_agent_id == agent.id
     assert assigned.assigned_at != nil
     assert assigned.status == "in_progress"
+
+    assert Rooms.room_member?(agent.id, treatment.room_id)
 
     assert Repo.get!(Treatment, treatment.id).status == "in_progress"
 
@@ -117,6 +193,70 @@ defmodule Chat.TreatmentsTest do
     assert event.metadata["assigned_agent_id"] == target_agent.id
   end
 
+  test "transfer preserves the current membership and grants the target access", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_045_006, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+    refute Rooms.room_member?(target_agent.id, room.id)
+
+    assert {:ok, transferred, :transferred} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+
+    assert transferred.assigned_agent_id == target_agent.id
+    assert Rooms.room_member?(current_agent.id, room.id)
+    assert Rooms.room_member?(target_agent.id, room.id)
+  end
+
+  test "stale former owner cannot close after transfer", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_045_008, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+
+    assert {:ok, _transferred, :transferred} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+
+    assert {:error, :not_assigned_agent} = Treatments.close(assigned, current_agent.id)
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+  end
+
+  test "transfer rolls back a new target membership when audit persistence fails", %{user: user} do
+    current_agent = logistics_agent_fixture()
+    target_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_045_009, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+    assert Repo.get_by(Chat.Rooms.RoomMember, user_id: target_agent.id, room_id: room.id) == nil
+
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{}} =
+             Treatments.transfer_agent(assigned, current_agent, target_agent)
+
+    assert Repo.get!(Treatment, treatment.id).assigned_agent_id == current_agent.id
+    assert Repo.get_by(Chat.Rooms.RoomMember, user_id: target_agent.id, room_id: room.id) == nil
+  end
+
   test "commercial user cannot transfer a treatment", %{user: user} do
     current_agent = logistics_agent_fixture()
     target_agent = logistics_agent_fixture()
@@ -151,7 +291,7 @@ defmodule Chat.TreatmentsTest do
              Treatments.transfer_agent(assigned, other_agent, target_agent)
   end
 
-  test "target must be another logistics member", %{user: user} do
+  test "target must be another logistics agent", %{user: user} do
     current_agent = logistics_agent_fixture()
     target_agent = logistics_agent_fixture()
     missing_target = %User{id: Ecto.UUID.generate(), role: "logistics_agent"}
@@ -162,17 +302,20 @@ defmodule Chat.TreatmentsTest do
     assert {:ok, _membership} = Rooms.join_room(current_agent.id, room.id)
     assert {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
 
-    assert {:error, :invalid_target_agent} =
+    assert {:ok, transferred, :transferred} =
              Treatments.transfer_agent(assigned, current_agent, target_agent)
 
-    assert {:error, :invalid_target_agent} =
-             Treatments.transfer_agent(assigned, current_agent, user)
+    assert transferred.assigned_agent_id == target_agent.id
+    assert Rooms.room_member?(target_agent.id, room.id)
 
     assert {:error, :invalid_target_agent} =
-             Treatments.transfer_agent(assigned, current_agent, missing_target)
+             Treatments.transfer_agent(transferred, target_agent, user)
+
+    assert {:error, :invalid_target_agent} =
+             Treatments.transfer_agent(transferred, target_agent, missing_target)
 
     assert {:error, :same_agent} =
-             Treatments.transfer_agent(assigned, current_agent, current_agent)
+             Treatments.transfer_agent(transferred, target_agent, target_agent)
   end
 
   test "current agent outside the room receives not_found", %{user: user} do
@@ -1075,6 +1218,34 @@ defmodule Chat.TreatmentsTest do
     assert audit_event_count(treatment, user, "treatment_assigned") == 0
   end
 
+  test "assignment rolls back the new membership when audit persistence fails", %{user: user} do
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment}} =
+             Treatments.open_for_order(9_998_045_005, user.id)
+
+    assert Repo.get_by(Chat.Rooms.RoomMember, user_id: agent.id, room_id: treatment.room_id) ==
+             nil
+
+    previous_inserter = Application.get_env(:chat, :treatment_audit_event_inserter)
+
+    Application.put_env(
+      :chat,
+      :treatment_audit_event_inserter,
+      Chat.TestSupport.FailingTreatmentAuditEventInserter
+    )
+
+    on_exit(fn -> restore_env(:treatment_audit_event_inserter, previous_inserter) end)
+
+    assert {:error, %Ecto.Changeset{}} = Treatments.assign_agent(treatment, agent)
+    assert Repo.get!(Treatment, treatment.id).status == "open"
+
+    assert Repo.get_by(Chat.Rooms.RoomMember, user_id: agent.id, room_id: treatment.room_id) ==
+             nil
+
+    assert audit_event_count(treatment, user, "treatment_assigned") == 0
+  end
+
   test "cannot assign a treatment outside the open state", %{user: user} do
     agent = logistics_agent_fixture()
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_486, user.id)
@@ -1271,7 +1442,7 @@ defmodule Chat.TreatmentsTest do
     refute Ecto.Changeset.get_change(changeset, :assigned_agent_id)
   end
 
-  test "reuses the protocol and audits a closed treatment reopening", %{user: user} do
+  test "reuses the protocol without reopening a closed treatment", %{user: user} do
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_471, user.id)
     assert {:ok, closed_treatment} = Treatments.close(treatment, user.id)
 
@@ -1280,16 +1451,15 @@ defmodule Chat.TreatmentsTest do
 
     assert reopened_treatment.id == treatment.id
     assert reopened_treatment.protocol_number == treatment.protocol_number
-    assert reopened_treatment.status == "open"
+    assert reopened_treatment.status == "closed"
 
     assert [
-             %{event_type: "treatment_reopened"},
              %{event_type: "treatment_closed"},
              %{event_type: "treatment_created"}
            ] =
              Treatments.list_audit_events(reopened_treatment.id, user.id)
 
-    assert Repo.get!(Chat.Treatments.Treatment, closed_treatment.id).status == "open"
+    assert Repo.get!(Chat.Treatments.Treatment, closed_treatment.id).status == "closed"
   end
 
   test "preload_for_presentation loads assigned agent for presentation", %{user: owner} do
@@ -1544,13 +1714,16 @@ defmodule Chat.TreatmentsTest do
       # 2. Race condition: agent_b leaves the room after discovery but before mutation
       assert {:ok, _} = Rooms.leave_room(agent_b.id, room.id)
 
-      # 3. Mutation: transfer_agent_for_room revalidates and rejects the now-invalid target
-      assert {:error, :invalid_target_agent} =
+      # 3. Mutation: transfer_agent_for_room grants historical target access
+      assert {:ok, transferred, :transferred} =
                Treatments.transfer_agent_for_room(room.id, agent_a, agent_b.id)
 
-      # Invariant: Treatment ownership and status remain untouched
+      assert transferred.assigned_agent_id == agent_b.id
+      assert Rooms.room_member?(agent_b.id, room.id)
+
+      # Invariant: Treatment ownership moves to the revalidated target
       persisted = Repo.get!(Treatment, treatment.id)
-      assert persisted.assigned_agent_id == agent_a.id
+      assert persisted.assigned_agent_id == agent_b.id
       assert persisted.status == "in_progress"
     end
 

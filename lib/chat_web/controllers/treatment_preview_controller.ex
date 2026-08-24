@@ -1,0 +1,28 @@
+defmodule ChatWeb.TreatmentPreviewController do
+  use ChatWeb, :controller
+
+  alias Chat.Treatments
+
+  def show(conn, %{"treatment_id" => treatment_id}) do
+    current_user = conn.assigns.current_user
+
+    with {:ok, preview} <- Treatments.get_preview(treatment_id, current_user) do
+      json(conn, preview)
+    else
+      {:error, :invalid_id} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "bad_request"})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "not_found"})
+
+      {:error, :forbidden} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "forbidden"})
+    end
+  end
+end

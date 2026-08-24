@@ -39,6 +39,18 @@ defmodule ChatWeb.OrderConversationController do
   def create(conn, _params), do: invalid_order_id(conn)
 
   defp open_conversation(conn, order_id) do
+    case Treatments.intake_state(order_id) do
+      {:missing, _reasons} ->
+        conn
+        |> put_status(:conflict)
+        |> json(%{error: "treatment_intake_required"})
+
+      {:existing, _treatment} ->
+        open_existing_conversation(conn, order_id)
+    end
+  end
+
+  defp open_existing_conversation(conn, order_id) do
     case Treatments.open_for_order(order_id, conn.assigns.current_user.id) do
       {:ok, %{room: room, treatment: treatment}} ->
         conn
@@ -55,6 +67,11 @@ defmodule ChatWeb.OrderConversationController do
         conn
         |> put_status(:not_found)
         |> json(%{error: "order_conversation_not_found"})
+
+      {:error, :forbidden} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "order_conversation_forbidden"})
 
       {:error, _reason} ->
         conn
