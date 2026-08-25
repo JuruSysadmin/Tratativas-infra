@@ -1624,7 +1624,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
              assigned_at: ^assigned_at,
              resolved_by_id: nil,
              resolved_at: nil
-            } = reopened_snapshot
+           } = reopened_snapshot
   end
 
   test "authorized commercial user rejoining a closed treatment room receives its closure snapshot" do
@@ -1771,6 +1771,54 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert reply_payload.closed_by_id == commercial.id
     assert reply_payload.closed_at != "2000-01-01T00:00:00Z"
     assert Repo.get!(Treatment, treatment.id).resolved_by_id == resolved.resolved_by_id
+  end
+
+  test "pushes presence_state on join with the current user's initial meta" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-presence-state-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{room: room}} = Treatments.open_for_order(9_998_044_100, owner.id)
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    {:ok, _reply, _socket} =
+      UserSocket
+      |> socket("channel-presence-state-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    assert_push "presence_state", presence_state
+
+    agent_id = agent.id
+    assert %{^agent_id => %{metas: [meta]}} = presence_state
+    assert meta.username == agent.username
+    assert meta.typing == false
+  end
+
+  test "presence_state and presence_diff reflect typing updates in the room" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-typing-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{room: room}} = Treatments.open_for_order(9_998_044_101, owner.id)
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    {:ok, _reply, socket} =
+      UserSocket
+      |> socket("channel-typing-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    assert_push "presence_state", presence_state
+
+    agent_id = agent.id
+    assert %{^agent_id => %{metas: [initial_meta]}} = presence_state
+    assert initial_meta.typing == false
+
+    # Presence.track_user broadcasts an initial presence_diff (typing: false) on join; flush it.
+    assert_receive %Phoenix.Socket.Message{event: "presence_diff"}
+
+    _ref = push(socket, "typing:start", %{})
+
+    assert_push "presence_diff", %{joins: joins}
+    assert %{^agent_id => %{metas: [typing_meta]}} = joins
+    assert typing_meta.typing == true
   end
 
   defp logistics_agent_fixture do

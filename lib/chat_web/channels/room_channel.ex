@@ -28,6 +28,9 @@ defmodule ChatWeb.RoomChannel do
     user = socket.assigns.current_user
     {:ok, _} = Presence.track_user(socket, user)
 
+    topic = "room:#{socket.assigns.room_id}"
+    push(socket, "presence_state", Presence.list(topic))
+
     broadcast!(socket, "user:joined", %{
       user_id: user.id,
       username: user.username
