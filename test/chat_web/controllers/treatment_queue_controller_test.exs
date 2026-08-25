@@ -6,6 +6,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
   alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Treatments
+  alias Chat.Treatments.Reason
   alias ChatWeb.TreatmentQueueController
 
   setup do
@@ -67,6 +68,34 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert first_item["can_assign"] == true
     refute Map.has_key?(first_item, "messages")
     refute Map.has_key?(first_item, "attachments")
+  end
+
+  test "includes the structured treatment reason in queue items", %{
+    conn: conn,
+    agent: agent,
+    treatment_1: treatment_1
+  } do
+    reason =
+      %Reason{}
+      |> Reason.changeset(%{code: "DELIVERY", label: "Entrega", active: true, sort_order: 1})
+      |> Repo.insert!()
+
+    treatment_1
+    |> Ecto.Changeset.change(treatment_reason_id: reason.id)
+    |> Repo.update!()
+
+    conn =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{})
+
+    item =
+      conn
+      |> json_response(200)
+      |> Map.fetch!("items")
+      |> Enum.find(&(&1["treatment_id"] == treatment_1.id))
+
+    assert item["reason"] == %{"code" => "DELIVERY", "label" => "Entrega"}
   end
 
   test "lists only the current logistics agent's in-progress treatment", %{

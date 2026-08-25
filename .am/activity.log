@@ -148,3 +148,12 @@
 2026-08-24T15:31:25Z	JuruSysadmin	started	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	Iniciando a integração das ferramentas de qualidade ao GitHub Actions.
 2026-08-24T15:33:37Z	JuruSysadmin	accepted	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	Workflow atualizado e validações locais executadas.
 2026-08-24T15:33:37Z	JuruSysadmin	accepted	tratativas-infra/Integrar-ferramentas-de-qualidade-ao-GitHub-Actions.md	Integração entregue para revisão humana; os achados das ferramentas permanecem explícitos no CI.
+2026-08-24T15:54:27Z	JuruSysadmin	chore	tratativas-infra/Corrigir-alias-de-mdulo-aninhado-em-ChatTreatments.md	target=priority position=top
+2026-08-24T15:54:35Z	JuruSysadmin	started	tratativas-infra/Corrigir-alias-de-mdulo-aninhado-em-ChatTreatments.md	Iniciando correção estrutural do aviso de alias aninhado reportado pelo Credo.
+2026-08-24T15:55:18Z	JuruSysadmin	accepted	tratativas-infra/Corrigir-alias-de-mdulo-aninhado-em-ChatTreatments.md	Correção estrutural implementada e validações executadas.
+2026-08-24T15:55:18Z	JuruSysadmin	accepted	tratativas-infra/Corrigir-alias-de-mdulo-aninhado-em-ChatTreatments.md	Correção entregue para revisão humana; não houve alteração de comportamento do preview.
+2026-08-24T16:05:02Z	JuruSysadmin	chore	tratativas-infra/Substituir-with-simples-no-TreatmentPreviewController.md	target=priority position=top
+2026-08-24T16:05:11Z	JuruSysadmin	started	tratativas-infra/Substituir-with-simples-no-TreatmentPreviewController.md	Iniciando refatoração estrutural para remover o warning do Credo sem alterar o contrato HTTP.
+2026-08-24T16:06:28Z	JuruSysadmin	accepted	tratativas-infra/Substituir-with-simples-no-TreatmentPreviewController.md	Refatoração concluída e validações executadas.
+2026-08-24T16:06:28Z	JuruSysadmin	accepted	tratativas-infra/Substituir-with-simples-no-TreatmentPreviewController.md	História entregue para revisão humana; contrato HTTP e lógica de preview preservados.
+2026-08-24T16:07:39Z	JuruSysadmin	chore	tratativas-infra/Corrigir-construo-opaca-de-EctoMulti-em-ChatMessages.md	target=priority position=top

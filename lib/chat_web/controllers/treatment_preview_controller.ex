@@ -6,9 +6,10 @@ defmodule ChatWeb.TreatmentPreviewController do
   def show(conn, %{"treatment_id" => treatment_id}) do
     current_user = conn.assigns.current_user
 
-    with {:ok, preview} <- Treatments.get_preview(treatment_id, current_user) do
-      json(conn, preview)
-    else
+    case Treatments.get_preview(treatment_id, current_user) do
+      {:ok, preview} ->
+        json(conn, preview)
+
       {:error, :invalid_id} ->
         conn
         |> put_status(:bad_request)

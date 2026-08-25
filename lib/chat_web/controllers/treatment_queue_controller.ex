@@ -21,6 +21,11 @@ defmodule ChatWeb.TreatmentQueueController do
               status: t.status,
               assigned_agent_id: t.assigned_agent_id,
               assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil),
+              reason:
+                if(t.reason,
+                  do: %{code: t.reason.code, label: t.reason.label},
+                  else: nil
+                ),
               can_assign:
                 Authorization.eligible_for_assignment?(
                   user,

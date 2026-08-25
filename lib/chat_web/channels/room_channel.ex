@@ -26,16 +26,12 @@ defmodule ChatWeb.RoomChannel do
   @impl true
   def handle_info(:after_join, socket) do
     user = socket.assigns.current_user
-    room_id = socket.assigns.room_id
     {:ok, _} = Presence.track_user(socket, user)
 
     broadcast!(socket, "user:joined", %{
       user_id: user.id,
       username: user.username
     })
-
-    online_users = Presence.list_online_users("room:#{room_id}")
-    push(socket, "presence_state", %{users: online_users})
 
     {:noreply, socket}
   end

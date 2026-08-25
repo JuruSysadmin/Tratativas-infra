@@ -4,6 +4,7 @@ defmodule Chat.Treatments do
   import Ecto.Query
 
   alias Chat.Accounts.User
+  alias Chat.Orders.Mock
   alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Rooms.{MembershipCache, RoomMember}
@@ -97,7 +98,7 @@ defmodule Chat.Treatments do
          %Treatment{} = treatment <- Repo.get(Treatment, treatment_id) |> Repo.preload(:reason),
          true <- treatment.status == "open" and is_nil(treatment.assigned_agent_id) do
       customer_summary =
-        case Chat.Orders.Mock.get(treatment.order_id) do
+        case Mock.get(treatment.order_id) do
           %{customer_id: id, customer_name: name} ->
             %{"customer_id" => id, "customer_name" => name}
 
@@ -379,7 +380,7 @@ defmodule Chat.Treatments do
       where:
         (t.status == "open" and is_nil(t.assigned_agent_id)) or
           (t.status == "in_progress" and t.assigned_agent_id == ^user_id),
-      preload: [:room, :assigned_agent],
+      preload: [:room, :assigned_agent, :reason],
       order_by: [desc: t.inserted_at, desc: t.id]
     )
   end
@@ -389,7 +390,7 @@ defmodule Chat.Treatments do
       join: r in assoc(t, :room),
       join: m in assoc(r, :members),
       where: m.id == ^user_id,
-      preload: [:room, :assigned_agent],
+      preload: [:room, :assigned_agent, :reason],
       order_by: [desc: t.inserted_at, desc: t.id]
     )
   end
