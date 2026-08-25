@@ -77,7 +77,13 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
   } do
     reason =
       %Reason{}
-      |> Reason.changeset(%{code: "DELIVERY", label: "Entrega", active: true, sort_order: 1})
+      |> Reason.changeset(%{
+        code: "DELIVERY",
+        label: "Entrega",
+        priority: "medium",
+        active: true,
+        sort_order: 1
+      })
       |> Repo.insert!()
 
     treatment_1
@@ -95,7 +101,11 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
       |> Map.fetch!("items")
       |> Enum.find(&(&1["treatment_id"] == treatment_1.id))
 
-    assert item["reason"] == %{"code" => "DELIVERY", "label" => "Entrega"}
+    assert item["reason"] == %{
+             "code" => "DELIVERY",
+             "label" => "Entrega",
+             "priority" => "medium"
+           }
   end
 
   test "lists only the current logistics agent's in-progress treatment", %{
@@ -217,6 +227,86 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert %{"items" => items_proto} = json_response(conn_proto, 200)
     assert length(items_proto) == 1
     assert List.first(items_proto)["treatment_id"] == treatment_1.id
+  end
+
+  test "defaults to active treatments and exposes explicit resolved and closed filters", %{
+    conn: conn,
+    owner: owner,
+    agent: agent,
+    treatment_1: treatment_1,
+    treatment_2: treatment_2
+  } do
+    assert {:ok, %{treatment: active}} = Treatments.open_for_order(9_998_044_303, owner.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment_1, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+    assert {:ok, assigned_for_close} = Treatments.assign_agent(treatment_2, agent)
+    assert {:ok, closed} = Treatments.close(assigned_for_close, owner.id)
+
+    default_response =
+      conn
+      |> assign(:current_user, owner)
+      |> TreatmentQueueController.index(%{})
+      |> json_response(200)
+
+    assert Enum.map(default_response["items"], & &1["status"]) == ["open"]
+    assert List.first(default_response["items"])["treatment_id"] == active.id
+    assert default_response["counts"] == %{"active" => 1, "resolved" => 1, "closed" => 1}
+
+    resolved_response =
+      conn
+      |> assign(:current_user, owner)
+      |> TreatmentQueueController.index(%{"status" => "resolved"})
+      |> json_response(200)
+
+    assert [%{"treatment_id" => resolved_id, "status" => "resolved"}] =
+             resolved_response["items"]
+
+    assert resolved_id == resolved.id
+    assert resolved_response["counts"] == %{"active" => 1, "resolved" => 1, "closed" => 1}
+
+    closed_response =
+      conn
+      |> assign(:current_user, owner)
+      |> TreatmentQueueController.index(%{
+        "status" => "closed",
+        "search" => Treatments.protocol(closed)
+      })
+      |> json_response(200)
+
+    assert [%{"treatment_id" => closed_id, "status" => "closed"}] = closed_response["items"]
+    assert closed_id == closed.id
+    assert closed_response["pagination"]["has_more"] == false
+  end
+
+  test "logistics sees only its resolved and closed treatments in history filters", %{
+    conn: conn,
+    owner: owner,
+    agent: agent,
+    treatment_1: treatment_1,
+    treatment_2: treatment_2
+  } do
+    assert {:ok, assigned} = Treatments.assign_agent(treatment_1, agent)
+    assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+    assert {:ok, assigned_for_close} = Treatments.assign_agent(treatment_2, agent)
+    assert {:ok, closed} = Treatments.close(assigned_for_close, owner.id)
+
+    resolved_response =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"status" => "resolved"})
+      |> json_response(200)
+
+    assert [%{"treatment_id" => resolved_id}] = resolved_response["items"]
+    assert resolved_id == resolved.id
+
+    closed_response =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{"status" => "closed"})
+      |> json_response(200)
+
+    assert [%{"treatment_id" => closed_id}] = closed_response["items"]
+    assert closed_id == closed.id
   end
 
   test "requires authentication for the queue route", %{conn: conn} do

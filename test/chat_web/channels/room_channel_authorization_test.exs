@@ -194,6 +194,38 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert resolution_audit_count(treatment, agent) == 1
   end
 
+  test "logistics closes directly and commercial can reject without refreshing" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-direct-close-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_044_030, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, _assigned} = Treatments.assign_agent(treatment, agent)
+
+    {:ok, _reply, agent_socket} =
+      UserSocket
+      |> socket("channel-direct-close-agent", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    close_ref = push(agent_socket, "treatment:close", %{})
+
+    assert_reply close_ref, :ok, %{treatment_id: treatment_id, status: "closed"}
+    assert_push "treatment:closed", %{treatment_id: ^treatment_id, status: "closed"}
+
+    {:ok, _reply, commercial_socket} =
+      UserSocket
+      |> socket("channel-direct-close-commercial", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    reopen_ref = push(commercial_socket, "treatment:reopen", %{})
+
+    assert_reply reopen_ref, :ok, %{treatment_id: ^treatment_id, status: "in_progress"}
+    assert_push "treatment:reopened", %{treatment_id: ^treatment_id, status: "in_progress"}
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+  end
+
   test "assigned logistics agent can transfer the room treatment through the channel" do
     {:ok, owner} = Identity.sync_user(%{"sub" => "channel-transfer-owner"}, %{})
     current_agent = logistics_agent_fixture()
@@ -1572,6 +1604,27 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     refute_receive {:DOWN, ^channel_ref, :process, ^channel_pid, _reason}
   end
 
+  test "marks room messages as read through the channel" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-mark-read-owner"}, %{})
+    {:ok, reader} = Identity.sync_user(%{"sub" => "channel-mark-read-reader"}, %{})
+    {:ok, room} = Rooms.create_room(%{"name" => "Sala para marcar leitura"}, owner.id)
+    assert {:ok, _membership} = Rooms.join_room(reader.id, room.id)
+
+    assert {:ok, message} =
+             Messages.create_message(%{"content" => "Mensagem para leitura"}, owner.id, room.id)
+
+    {:ok, _reply, reader_socket} =
+      UserSocket
+      |> socket("channel-mark-read-reader", %{current_user: reader})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(reader_socket, "messages:read", %{"message_ids" => [message.id]})
+
+    assert_reply ref, :ok, %{message_ids: [message_id]}
+    assert message_id == message.id
+    assert Messages.someone_read?(message.id, owner.id)
+  end
+
   test "channel join returns stable treatment snapshot for resolved and reopened treatments" do
     {:ok, commercial} = Identity.sync_user(%{"sub" => "channel-join-snapshot-commercial"}, %{})
     agent = logistics_agent_fixture()
@@ -1819,6 +1872,33 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert_push "presence_diff", %{joins: joins}
     assert %{^agent_id => %{metas: [typing_meta]}} = joins
     assert typing_meta.typing == true
+  end
+
+  test "recipient can mark messages delivered and sender receives the delivery receipt" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "channel-delivery-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{room: room}} = Treatments.open_for_order(9_998_044_102, owner.id)
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, message} = Messages.create_message(%{"content" => "Entrega"}, owner.id, room.id)
+
+    {:ok, _reply, owner_socket} =
+      UserSocket
+      |> socket("channel-delivery-owner-socket", %{current_user: owner})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    {:ok, _reply, agent_socket} =
+      UserSocket
+      |> socket("channel-delivery-agent-socket", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(agent_socket, "messages:delivered", %{"message_ids" => [message.id]})
+
+    assert_reply ref, :ok, %{message_ids: [message_id]}
+    assert message_id == message.id
+    assert_push "delivery_receipts:updated", %{user_id: recipient_id, message_ids: [^message_id]}
+    assert recipient_id == agent.id
+    assert owner_socket != nil
   end
 
   defp logistics_agent_fixture do

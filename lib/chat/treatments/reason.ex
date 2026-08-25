@@ -10,6 +10,7 @@ defmodule Chat.Treatments.Reason do
   schema "treatment_reasons" do
     field :code, :string
     field :label, :string
+    field :priority, :string
     field :active, :boolean, default: true
     field :sort_order, :integer
 
@@ -18,8 +19,9 @@ defmodule Chat.Treatments.Reason do
 
   def changeset(reason, attrs) do
     reason
-    |> cast(attrs, [:code, :label, :active, :sort_order])
-    |> validate_required([:code, :label, :active, :sort_order])
+    |> cast(attrs, [:code, :label, :priority, :active, :sort_order])
+    |> validate_required([:code, :label, :priority, :active, :sort_order])
+    |> validate_inclusion(:priority, ["critical", "high", "medium", "low"])
     |> unique_constraint(:code)
   end
 end

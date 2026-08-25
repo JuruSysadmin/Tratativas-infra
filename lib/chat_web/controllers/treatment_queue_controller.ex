@@ -10,7 +10,7 @@ defmodule ChatWeb.TreatmentQueueController do
     user = conn.assigns.current_user
 
     case Treatments.list_queue(user, params) do
-      {:ok, %{items: treatments, pagination: pagination}} ->
+      {:ok, %{items: treatments, pagination: pagination, counts: counts}} ->
         items =
           Enum.map(treatments, fn t ->
             %{
@@ -23,7 +23,7 @@ defmodule ChatWeb.TreatmentQueueController do
               assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil),
               reason:
                 if(t.reason,
-                  do: %{code: t.reason.code, label: t.reason.label},
+                  do: %{code: t.reason.code, label: t.reason.label, priority: t.reason.priority},
                   else: nil
                 ),
               can_assign:
@@ -37,7 +37,7 @@ defmodule ChatWeb.TreatmentQueueController do
             }
           end)
 
-        json(conn, %{items: items, pagination: pagination})
+        json(conn, %{items: items, pagination: pagination, counts: counts})
 
       {:error, :invalid_limit} ->
         conn

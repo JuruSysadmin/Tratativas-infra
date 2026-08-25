@@ -179,6 +179,26 @@ defmodule Chat.Broadcaster do
     )
   end
 
+  def broadcast_treatment_created(payload, opts \\ []) do
+    pubsub = Keyword.get(opts, :pubsub, Phoenix.PubSub)
+    topic = "treatments:queue"
+
+    event = %Phoenix.Socket.Broadcast{
+      topic: topic,
+      event: "treatment:created",
+      payload: payload
+    }
+
+    case pubsub.broadcast(Chat.PubSub, topic, event) do
+      :ok -> :ok
+      {:error, reason} -> log_failure("treatment_created", [], inspect(reason))
+    end
+  rescue
+    exception -> log_failure("treatment_created", [], Exception.message(exception))
+  catch
+    :exit, reason -> log_failure("treatment_created", [], inspect(reason))
+  end
+
   defp broadcast(room_id, event, event_name, metadata, opts) do
     pubsub = Keyword.get(opts, :pubsub, Phoenix.PubSub)
 

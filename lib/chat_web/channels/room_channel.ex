@@ -76,6 +76,18 @@ defmodule ChatWeb.RoomChannel do
     {:noreply, socket}
   end
 
+  def handle_info(
+        {:delivery_receipts_updated, room_id, user_id, message_ids},
+        %{assigns: %{room_id: room_id}} = socket
+      ) do
+    push(socket, "delivery_receipts:updated", %{user_id: user_id, message_ids: message_ids})
+    {:noreply, socket}
+  end
+
+  def handle_info({:delivery_receipts_updated, _room_id, _user_id, _message_ids}, socket) do
+    {:noreply, socket}
+  end
+
   def handle_info({:treatment_assigned, payload}, socket) do
     push(socket, "treatment:agent_assigned", payload)
     {:noreply, socket}
@@ -120,6 +132,50 @@ defmodule ChatWeb.RoomChannel do
 
   def handle_in("message:new", _params, socket) do
     {:reply, {:error, %{reason: "invalid_message"}}, socket}
+  end
+
+  def handle_in("messages:read", %{"message_ids" => message_ids}, socket)
+      when is_list(message_ids) do
+    if Enum.all?(message_ids, &valid_message_id?/1) do
+      user = socket.assigns.current_user
+      room_id = socket.assigns.room_id
+      {inserted_ids, position_advanced?} = Messages.mark_room_read(message_ids, user.id, room_id)
+
+      if inserted_ids != [] do
+        Chat.Broadcaster.broadcast_read_receipts_updated(room_id, user.id, inserted_ids)
+      end
+
+      {:reply, {:ok, %{message_ids: inserted_ids, position_advanced: position_advanced?}}, socket}
+    else
+      {:reply, {:error, %{reason: "invalid_message_ids"}}, socket}
+    end
+  end
+
+  def handle_in("messages:read", _params, socket) do
+    {:reply, {:error, %{reason: "invalid_message_ids"}}, socket}
+  end
+
+  def handle_in("messages:delivered", %{"message_ids" => message_ids}, socket)
+      when is_list(message_ids) do
+    if Enum.all?(message_ids, &valid_message_id?/1) do
+      user = socket.assigns.current_user
+      room_id = socket.assigns.room_id
+
+      case Messages.advance_room_delivery_position(user.id, room_id, message_ids) do
+        {:ok, _position} ->
+          Chat.Broadcaster.broadcast_delivery_receipts_updated(room_id, user.id, message_ids)
+          {:reply, {:ok, %{message_ids: message_ids}}, socket}
+
+        {:error, _reason} ->
+          {:reply, {:ok, %{message_ids: []}}, socket}
+      end
+    else
+      {:reply, {:error, %{reason: "invalid_message_ids"}}, socket}
+    end
+  end
+
+  def handle_in("messages:delivered", _params, socket) do
+    {:reply, {:error, %{reason: "invalid_message_ids"}}, socket}
   end
 
   def handle_in("message:delete", %{"message_id" => message_id}, socket) do
@@ -232,6 +288,29 @@ defmodule ChatWeb.RoomChannel do
 
       _unexpected_result ->
         {:reply, {:error, %{reason: "treatment_resolution_failed"}}, socket}
+    end
+  end
+
+  def handle_in("treatment:close", _params, socket) do
+    result =
+      Treatments.close_for_room(
+        socket.assigns.room_id,
+        socket.assigns.current_user
+      )
+
+    case result do
+      {:ok, closed_treatment, :closed} ->
+        treatment = Treatments.preload_for_presentation(closed_treatment)
+        payload = treatment_lifecycle_payload(treatment)
+        broadcast!(socket, "treatment:closed", payload)
+        {:reply, {:ok, payload}, socket}
+
+      {:error, reason}
+      when reason in [:forbidden, :not_assigned_agent, :invalid_status, :not_found] ->
+        {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
+
+      _unexpected_result ->
+        {:reply, {:error, %{reason: "treatment_closure_failed"}}, socket}
     end
   end
 
@@ -404,6 +483,12 @@ defmodule ChatWeb.RoomChannel do
         })
     end
   end
+
+  defp valid_message_id?(message_id) when is_binary(message_id) do
+    match?({:ok, _id}, Ecto.UUID.cast(message_id))
+  end
+
+  defp valid_message_id?(_message_id), do: false
 
   defp assigned_agent_username(%{assigned_agent: %{username: username}}), do: username
   defp assigned_agent_username(_treatment), do: nil

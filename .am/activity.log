@@ -157,3 +157,19 @@
 2026-08-24T16:06:28Z	JuruSysadmin	accepted	tratativas-infra/Substituir-with-simples-no-TreatmentPreviewController.md	Refatoração concluída e validações executadas.
 2026-08-24T16:06:28Z	JuruSysadmin	accepted	tratativas-infra/Substituir-with-simples-no-TreatmentPreviewController.md	História entregue para revisão humana; contrato HTTP e lógica de preview preservados.
 2026-08-24T16:07:39Z	JuruSysadmin	chore	tratativas-infra/Corrigir-construo-opaca-de-EctoMulti-em-ChatMessages.md	target=priority position=top
+2026-08-25T17:38:58Z	JuruSysadmin	created	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	target=priority position=bottom
+2026-08-25T17:39:41Z	JuruSysadmin	estimate	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	5
+2026-08-25T17:39:53Z	JuruSysadmin	started	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T17:50:54Z	JuruSysadmin	delivered	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T18:15:12Z	JuruSysadmin	started	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T18:17:38Z	JuruSysadmin	delivered	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T19:35:49Z	JuruSysadmin	created	tratativas-infra/Notificar-agentes-de-logstica-sobre-novas-tratativas-em-tempo-real.md	target=priority position=top
+2026-08-25T19:36:18Z	JuruSysadmin	started	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T19:36:25Z	JuruSysadmin	started	tratativas-infra/Notificar-agentes-de-logstica-sobre-novas-tratativas-em-tempo-real.md	
+2026-08-25T19:37:39Z	JuruSysadmin	delivered	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T19:46:48Z	JuruSysadmin	started	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T19:47:50Z	JuruSysadmin	delivered	tratativas-infra/Adicionar-comando-items-para-consultar-itens-do-pedido-no-Chat.md	
+2026-08-25T19:56:38Z	JuruSysadmin	finished	tratativas-infra/Notificar-agentes-de-logstica-sobre-novas-tratativas-em-tempo-real.md	
+2026-08-25T20:56:26Z	JuruSysadmin	created	tratativas-infra/Adicionar-comando-pedido-com-resumo-e-pedidos-relacionados-no-Chat.md	target=priority position=bottom
+2026-08-25T20:56:58Z	JuruSysadmin	estimate	tratativas-infra/Adicionar-comando-pedido-com-resumo-e-pedidos-relacionados-no-Chat.md	5
+2026-08-25T20:57:14Z	JuruSysadmin	started	tratativas-infra/Adicionar-comando-pedido-com-resumo-e-pedidos-relacionados-no-Chat.md	

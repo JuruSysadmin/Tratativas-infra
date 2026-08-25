@@ -59,7 +59,8 @@ defmodule ChatWeb.TreatmentIntakeController do
 
   defp parse_order_id(_order_id), do: :error
 
-  defp reason_json(reason), do: %{code: reason.code, label: reason.label}
+  defp reason_json(reason),
+    do: %{code: reason.code, label: reason.label, priority: reason.priority}
 
   defp invalid_order_id(conn),
     do: conn |> put_status(:bad_request) |> json(%{error: "invalid_order_id"})
