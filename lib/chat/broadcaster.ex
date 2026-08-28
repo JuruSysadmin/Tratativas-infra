@@ -13,6 +13,21 @@ defmodule Chat.Broadcaster do
     )
   end
 
+  def broadcast_assigned_room_message(message, assigned_agent_id, opts \\ []) do
+    sender_id = Keyword.get(opts, :sender_id)
+
+    if is_binary(assigned_agent_id) and assigned_agent_id != sender_id do
+      broadcast_user_event(
+        assigned_agent_id,
+        {:assigned_room_message_created, %{room_id: message.room_id, message_id: message.id}},
+        "assigned_room_message_created",
+        opts
+      )
+    else
+      :ok
+    end
+  end
+
   def broadcast_message_updated(room_id, message, opts \\ []) do
     broadcast(
       room_id,
@@ -227,4 +242,17 @@ defmodule Chat.Broadcaster do
 
   defp topic(room_id), do: "room:#{room_id}"
   defp user_topic(user_id), do: "user:#{user_id}"
+
+  defp broadcast_user_event(user_id, event, event_name, opts) do
+    pubsub = Keyword.get(opts, :pubsub, Phoenix.PubSub)
+
+    case pubsub.broadcast(Chat.PubSub, user_topic(user_id), event) do
+      :ok -> :ok
+      {:error, reason} -> log_failure(event_name, [user_id: user_id], inspect(reason))
+    end
+  rescue
+    exception -> log_failure(event_name, [user_id: user_id], Exception.message(exception))
+  catch
+    :exit, reason -> log_failure(event_name, [user_id: user_id], inspect(reason))
+  end
 end

@@ -36,6 +36,29 @@ defmodule Chat.BroadcasterTest do
     refute_receive {:read_receipt_updated, _, _, _}
   end
 
+  test "notifies the assigned agent but not the sender" do
+    room_id = Ecto.UUID.generate()
+    message_id = Ecto.UUID.generate()
+    assigned_agent_id = Ecto.UUID.generate()
+    message = %{id: message_id, room_id: room_id}
+
+    Phoenix.PubSub.subscribe(Chat.PubSub, "user:#{assigned_agent_id}")
+
+    assert :ok =
+             Broadcaster.broadcast_assigned_room_message(message, assigned_agent_id,
+               sender_id: Ecto.UUID.generate()
+             )
+
+    assert_receive {:assigned_room_message_created, %{room_id: ^room_id, message_id: ^message_id}}
+
+    assert :ok =
+             Broadcaster.broadcast_assigned_room_message(message, assigned_agent_id,
+               sender_id: assigned_agent_id
+             )
+
+    refute_receive {:assigned_room_message_created, _}
+  end
+
   test "deletion broadcast failure is logged without escaping" do
     room_id = Ecto.UUID.generate()
     message_id = Ecto.UUID.generate()

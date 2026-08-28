@@ -386,12 +386,13 @@ defmodule Chat.Messages do
   defp handle_insert_result(
          {:ok, %{message_with_user: message, mentions: mentions}},
          _client_id,
-         _user_id,
+         user_id,
          room_id,
          _attrs,
          broadcaster
        ) do
     broadcast_message_created(broadcaster, room_id, message)
+    broadcast_assigned_room_message(broadcaster, message, room_id, user_id)
     broadcast_mentions_created(broadcaster, message, mentions)
     {:ok, message}
   end
@@ -464,6 +465,38 @@ defmodule Chat.Messages do
       {:error, :client_id_conflict} -> {:error, :client_id_conflict}
       :not_found -> {:error, changeset}
     end
+  end
+
+  defp broadcast_assigned_room_message(broadcaster, message, room_id, sender_id) do
+    assigned_agent_id = assigned_agent_id_for_room(room_id)
+
+    if function_exported?(broadcaster, :broadcast_assigned_room_message, 3) do
+      broadcaster.broadcast_assigned_room_message(message, assigned_agent_id,
+        sender_id: sender_id
+      )
+    end
+  rescue
+    exception ->
+      Logger.error("assigned room message broadcast failed",
+        room_id: room_id,
+        message_id: message.id,
+        error: Exception.message(exception)
+      )
+
+      :ok
+  catch
+    :exit, reason ->
+      Logger.error("assigned room message broadcast failed",
+        room_id: room_id,
+        message_id: message.id,
+        error: inspect(reason)
+      )
+
+      :ok
+  end
+
+  defp assigned_agent_id_for_room(room_id) do
+    Repo.one(from t in Treatment, where: t.room_id == ^room_id, select: t.assigned_agent_id)
   end
 
   defp lock_room_for_mentions(repo, room_id) do
