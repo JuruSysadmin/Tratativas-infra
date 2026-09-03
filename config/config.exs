@@ -29,6 +29,11 @@ config :chat, :message_attachment_storage,
   scheme: System.get_env("MESSAGE_ATTACHMENT_S3_SCHEME"),
   presign_ttl_seconds: 300
 
+config :chat, :ollama,
+  endpoint: System.get_env("OLLAMA_URL", "http://127.0.0.1:11434/api/chat"),
+  model: System.get_env("OLLAMA_MODEL", "qwen3-4b-2k:latest"),
+  request_options: [receive_timeout: 60_000]
+
 # ExAws uses Req as its default HTTP client. Development overrides this for
 # MinIO because its strict SigV4 validation rejects headers added by Req.
 config :ex_aws, http_client: ExAws.Request.Req

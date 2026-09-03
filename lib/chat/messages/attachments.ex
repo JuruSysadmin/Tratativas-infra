@@ -12,32 +12,55 @@ defmodule Chat.Messages.Attachments do
 
   @max_file_size 10 * 1024 * 1024
   @max_attachments_per_message 5
-  @allowed_content_types ~w(application/pdf image/jpeg image/png)
+  @allowed_content_types ~w(
+    application/pdf
+    image/jpeg
+    image/png
+    audio/webm
+    audio/mp4
+    audio/aac
+    audio/ogg
+    audio/mpeg
+    audio/wav
+    audio/x-m4a
+  )
   @verification_delay_seconds 30
   @attachment_ttl_seconds 5 * 60
 
   def payload(%MessageAttachment{} = attachment, opts \\ []) do
-    download_url =
-      case presigner(opts).presign_download(attachment) do
-        {:ok, url} ->
-          url
-
-        {:error, reason} ->
-          Logger.error(
-            "message attachment download URL generation failed " <>
-              "attachment_id=#{attachment.id} error=#{inspect(reason)}"
-          )
-
-          nil
-      end
+    download_url = download_url(attachment, opts)
 
     %{
       id: attachment.id,
       filename: attachment.filename,
       content_type: attachment.content_type,
       size: attachment.size,
+      metadata: attachment.metadata,
       download_url: download_url
     }
+  end
+
+  defp download_url(attachment, opts) do
+    case presigner(opts).presign_download(attachment) do
+      {:ok, url} ->
+        url
+
+      {:error, reason} ->
+        Logger.error(
+          "message attachment download URL generation failed " <>
+            "attachment_id=#{attachment.id} error=#{inspect(reason)}"
+        )
+
+        nil
+    end
+  rescue
+    exception ->
+      Logger.error(
+        "message attachment download URL generation raised " <>
+          "attachment_id=#{attachment.id} error=#{Exception.message(exception)}"
+      )
+
+      nil
   end
 
   def message_payload_attachments(%{attachments: attachments}, opts \\ []) do

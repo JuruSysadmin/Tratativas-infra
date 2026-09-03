@@ -14,6 +14,7 @@ defmodule Chat.Treatments.Treatment do
     field :assigned_at, :utc_datetime_usec
     field :resolved_at, :utc_datetime_usec
     field :closed_at, :utc_datetime_usec
+    field :sla_paused_seconds, :integer, default: 0
 
     belongs_to :room, Chat.Rooms.Room
     belongs_to :opened_by, Chat.Accounts.User
@@ -38,7 +39,13 @@ defmodule Chat.Treatments.Treatment do
       :initial_description
     ])
     |> validate_required([:order_id, :status, :room_id, :opened_by_id])
-    |> validate_inclusion(:status, ["open", "in_progress", "resolved", "closed"])
+    |> validate_inclusion(:status, [
+      "open",
+      "in_progress",
+      "pending_confirmation",
+      "resolved",
+      "closed"
+    ])
     |> unique_constraint(:order_id)
     |> unique_constraint(:room_id)
     |> foreign_key_constraint(:treatment_reason_id)
@@ -48,7 +55,13 @@ defmodule Chat.Treatments.Treatment do
     treatment
     |> cast(attrs, [:assigned_agent_id, :assigned_at, :status])
     |> validate_required([:assigned_agent_id, :assigned_at])
-    |> validate_inclusion(:status, ["open", "in_progress", "resolved", "closed"])
+    |> validate_inclusion(:status, [
+      "open",
+      "in_progress",
+      "pending_confirmation",
+      "resolved",
+      "closed"
+    ])
     |> foreign_key_constraint(:assigned_agent_id)
   end
 
@@ -69,13 +82,22 @@ defmodule Chat.Treatments.Treatment do
 
   def resolution_changeset(treatment, resolved_by_id, resolved_at) do
     treatment
-    |> change(%{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at})
+    |> change(%{
+      status: "pending_confirmation",
+      resolved_by_id: resolved_by_id,
+      resolved_at: resolved_at
+    })
     |> validate_required([:resolved_by_id, :resolved_at])
     |> foreign_key_constraint(:resolved_by_id)
   end
 
-  def reopen_changeset(treatment) do
-    change(treatment, %{status: "in_progress", resolved_by_id: nil, resolved_at: nil})
+  def reopen_changeset(treatment, sla_paused_seconds) do
+    change(treatment, %{
+      status: "in_progress",
+      resolved_by_id: nil,
+      resolved_at: nil,
+      sla_paused_seconds: sla_paused_seconds
+    })
   end
 
   def closure_changeset(treatment, closed_by_id, closed_at) do

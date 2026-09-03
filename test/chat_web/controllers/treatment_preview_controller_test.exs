@@ -192,8 +192,7 @@ defmodule ChatWeb.TreatmentPreviewControllerTest do
         })
 
       {:ok, treatment} = Treatments.assign_agent(treatment, agent)
-      {:ok, treatment} = Treatments.resolve(treatment, agent)
-      {:ok, _treatment} = Treatments.close(treatment, owner.id)
+      {:ok, _treatment, :closed} = Treatments.close(treatment, agent)
 
       other_agent = logistics_agent_fixture()
 

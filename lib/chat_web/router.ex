@@ -63,6 +63,7 @@ defmodule ChatWeb.Router do
   scope "/api", ChatWeb do
     pipe_through [:api, :auth]
 
+    post "/ai/ask", AIController, :ask
     resources "/order-conversations", OrderConversationController, only: [:index, :create]
     get "/treatment-intakes/:order_id", TreatmentIntakeController, :show
     post "/treatment-intakes", TreatmentIntakeController, :create

@@ -2,11 +2,10 @@
 title: Notificar agentes de logística sobre novas tratativas em tempo real
 type: feature
 created: "2026-08-25T19:35:48Z"
-modified: "2026-08-25T19:56:38Z"
+modified: "2026-08-28T15:16:30Z"
 author: JuruSysadmin
-status: finished
+status: started
 started: "2026-08-25T19:36:25Z"
-finished: "2026-08-25T19:56:38Z"
 ---
 
 ## Problem statement
@@ -33,6 +32,15 @@ Adicionar um Phoenix Channel global autorizado para a fila, publicar o evento ap
 - [x] Implementar hook realtime e notificações Carbon
 - [x] Executar verificações relevantes de backend e frontend
 
+- [x] Corrigir o retorno de handle_out/3 no UserChannel para preservar o socket
+- [x] Adicionar teste do encaminhamento privado via handle_out/3
+- [ ] Executar Dialyzer, testes focados, git diff --check e registrar o resultado
+- [x] Adicionar teste que confirme visibilidade commitada da mensagem durante o callback de broadcast
+- [x] Reorganizar testes de Chat.Messages por área de comportamento
+- [x] Migrar todos os testes sem alterar comportamento ou produção
+- [x] Executar testes focados, suíte de mensagens, formatação e diff check
+- [x] Validar idempotência observável de retry por client_id: mesma mensagem, uma persistência e um broadcast
+- [x] Criar teste de integração para desconectar, reconectar, recuperar contexto e reconciliar outbox por client_id sem duplicidade
 ## Comments
 
 ## Attachments

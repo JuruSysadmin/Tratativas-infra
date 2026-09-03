@@ -477,6 +477,11 @@ defmodule Chat.Messages do
     end
   rescue
     exception ->
+      Sentry.capture_exception(exception,
+        stacktrace: __STACKTRACE__,
+        extra: %{room_id: room_id, message_id: message.id}
+      )
+
       Logger.error("assigned room message broadcast failed",
         room_id: room_id,
         message_id: message.id,
@@ -486,6 +491,10 @@ defmodule Chat.Messages do
       :ok
   catch
     :exit, reason ->
+      Sentry.capture_message("assigned room message broadcast exited",
+        extra: %{room_id: room_id, message_id: message.id, reason: inspect(reason)}
+      )
+
       Logger.error("assigned room message broadcast failed",
         room_id: room_id,
         message_id: message.id,
@@ -525,7 +534,7 @@ defmodule Chat.Messages do
         {:ok, :authorized}
 
       {_role, _treatment_id, _assigned_agent_id, status}
-      when status in ["resolved", "closed"] ->
+       when status in ["pending_confirmation", "resolved", "closed"] ->
         {:error, :treatment_closed}
 
       {role, _treatment_id, assigned_agent_id, _status} ->
@@ -554,7 +563,7 @@ defmodule Chat.Messages do
         lock: "FOR SHARE"
 
     case repo.one(query) do
-      status when status in ["resolved", "closed"] ->
+       status when status in ["pending_confirmation", "resolved", "closed"] ->
         {:error, :treatment_closed}
 
       _ ->
@@ -669,6 +678,11 @@ defmodule Chat.Messages do
     end
   rescue
     exception ->
+      Sentry.capture_exception(exception,
+        stacktrace: __STACKTRACE__,
+        extra: %{message_id: message.id}
+      )
+
       Logger.error("mention broadcast failed",
         message_id: message.id,
         error: Exception.message(exception)
@@ -677,6 +691,10 @@ defmodule Chat.Messages do
       :ok
   catch
     :exit, reason ->
+      Sentry.capture_message("mention broadcast exited",
+        extra: %{message_id: message.id, reason: inspect(reason)}
+      )
+
       Logger.error("mention broadcast failed",
         message_id: message.id,
         error: inspect(reason)
@@ -689,6 +707,11 @@ defmodule Chat.Messages do
     broadcaster.broadcast_message_created(room_id, message)
   rescue
     exception ->
+      Sentry.capture_exception(exception,
+        stacktrace: __STACKTRACE__,
+        extra: %{room_id: room_id, message_id: message.id}
+      )
+
       Logger.error("message broadcast failed",
         room_id: room_id,
         message_id: message.id,
@@ -698,6 +721,10 @@ defmodule Chat.Messages do
       :ok
   catch
     :exit, reason ->
+      Sentry.capture_message("message broadcast exited",
+        extra: %{room_id: room_id, message_id: message.id, reason: inspect(reason)}
+      )
+
       Logger.error("message broadcast failed",
         room_id: room_id,
         message_id: message.id,
@@ -1317,6 +1344,11 @@ defmodule Chat.Messages do
     broadcaster.broadcast_message_updated(room_id, message)
   rescue
     exception ->
+      Sentry.capture_exception(exception,
+        stacktrace: __STACKTRACE__,
+        extra: %{room_id: room_id, message_id: message.id}
+      )
+
       Logger.error("message broadcast failed",
         room_id: room_id,
         message_id: message.id,
@@ -1326,6 +1358,10 @@ defmodule Chat.Messages do
       :ok
   catch
     :exit, reason ->
+      Sentry.capture_message("message broadcast exited",
+        extra: %{room_id: room_id, message_id: message.id, reason: inspect(reason)}
+      )
+
       Logger.error("message broadcast failed",
         room_id: room_id,
         message_id: message.id,

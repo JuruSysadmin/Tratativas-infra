@@ -23,7 +23,8 @@ defmodule ChatWeb.TreatmentAssignmentControllerTest do
     assert %{
              "treatment_id" => treatment_id,
              "status" => "in_progress",
-             "assigned_agent_id" => assigned_agent_id
+             "assigned_agent_id" => assigned_agent_id,
+             "sla_paused_seconds" => 0
            } = json_response(conn, 200)
 
     assert treatment_id == treatment.id
@@ -46,6 +47,32 @@ defmodule ChatWeb.TreatmentAssignmentControllerTest do
     assert_receive {:treatment_assigned, payload}
     assert payload.treatment_id == treatment.id
     assert Repo.get!(Chat.Treatments.Treatment, treatment.id).status == "in_progress"
+  end
+
+  test "broadcasts the canonical treatment update to the queue topic", %{conn: conn} do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "queue-update-owner"}, %{})
+    agent = logistics_agent_fixture()
+    {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_045_005, owner.id)
+    Phoenix.PubSub.subscribe(Chat.PubSub, "treatments:queue")
+
+    conn =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentAssignmentController.create(%{"treatment_id" => treatment.id})
+
+    assert response(conn, 200)
+
+    assert_receive %Phoenix.Socket.Broadcast{
+      topic: "treatments:queue",
+      event: "treatment:updated",
+      payload: payload
+    }
+
+    assert payload.treatment_id == treatment.id
+    assert payload.status == "in_progress"
+    assert payload.assigned_agent_id == agent.id
+    assert payload.order_id == 9_998_045_005
+    assert payload.can_assign == false
   end
 
   test "commercial users cannot assign a treatment", %{conn: conn} do

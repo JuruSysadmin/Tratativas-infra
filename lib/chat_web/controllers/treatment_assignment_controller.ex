@@ -4,6 +4,7 @@ defmodule ChatWeb.TreatmentAssignmentController do
   use ChatWeb, :controller
 
   alias Chat.Broadcaster
+  alias Chat.Realtime.Payloads
   alias Chat.Treatments
 
   def create(conn, %{"treatment_id" => treatment_id}) do
@@ -13,6 +14,7 @@ defmodule ChatWeb.TreatmentAssignmentController do
       {:ok, treatment, :assigned} ->
         payload = assignment_payload(treatment)
         Broadcaster.broadcast_treatment_assigned(treatment.room_id, payload)
+        Broadcaster.broadcast_treatment_updated(Payloads.treatment(treatment))
         json(conn, payload)
 
       {:ok, treatment, :idempotent} ->
@@ -38,6 +40,7 @@ defmodule ChatWeb.TreatmentAssignmentController do
       status: treatment.status,
       assigned_agent_id: treatment.assigned_agent_id,
       assigned_at: treatment.assigned_at,
+      sla_paused_seconds: treatment.sla_paused_seconds,
       assigned_agent_username: treatment.assigned_agent.username
     }
   end

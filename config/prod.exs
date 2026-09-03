@@ -2,6 +2,11 @@ import Config
 
 config :chat, secure_session_cookie: true
 
+config :sentry,
+  environment_name: Mix.env(),
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()]
+
 # Force using SSL in production. This also sets the "strict-security-transport" header,
 # known as HSTS. If you have a health check endpoint, you may want to exclude it below.
 # Note `:force_ssl` is required to be set at compile-time.

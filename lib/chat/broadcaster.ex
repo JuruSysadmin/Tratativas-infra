@@ -94,9 +94,11 @@ defmodule Chat.Broadcaster do
     end)
   rescue
     exception ->
+      report_exception(exception, __STACKTRACE__, message_id: message.id)
       log_failure("mention_created", [message_id: message.id], Exception.message(exception))
   catch
     :exit, reason ->
+      report_exit("mention_created", reason, message_id: message.id)
       log_failure("mention_created", [message_id: message.id], inspect(reason))
   end
 
@@ -119,9 +121,11 @@ defmodule Chat.Broadcaster do
     end)
   rescue
     exception ->
+      report_exception(exception, __STACKTRACE__, message_id: message.id)
       log_failure("mention_deleted", [message_id: message.id], Exception.message(exception))
   catch
     :exit, reason ->
+      report_exit("mention_deleted", reason, message_id: message.id)
       log_failure("mention_deleted", [message_id: message.id], inspect(reason))
   end
 
@@ -143,9 +147,11 @@ defmodule Chat.Broadcaster do
     end)
   rescue
     exception ->
+      report_exception(exception, __STACKTRACE__, room_id: room_id)
       log_failure("room_deleted", [room_id: room_id], Exception.message(exception))
   catch
     :exit, reason ->
+      report_exit("room_deleted", reason, room_id: room_id)
       log_failure("room_deleted", [room_id: room_id], inspect(reason))
   end
 
@@ -162,9 +168,11 @@ defmodule Chat.Broadcaster do
     end
   rescue
     exception ->
+      report_exception(exception, __STACKTRACE__, user_id: user_id)
       log_failure("mention_state_changed", [user_id: user_id], Exception.message(exception))
   catch
     :exit, reason ->
+      report_exit("mention_state_changed", reason, user_id: user_id)
       log_failure("mention_state_changed", [user_id: user_id], inspect(reason))
   end
 
@@ -178,9 +186,11 @@ defmodule Chat.Broadcaster do
     end
   rescue
     exception ->
+      report_exception(exception, __STACKTRACE__, user_id: user_id)
       log_failure("membership_left", [user_id: user_id], Exception.message(exception))
   catch
     :exit, reason ->
+      report_exit("membership_left", reason, user_id: user_id)
       log_failure("membership_left", [user_id: user_id], inspect(reason))
   end
 
@@ -195,24 +205,38 @@ defmodule Chat.Broadcaster do
   end
 
   def broadcast_treatment_created(payload, opts \\ []) do
+    broadcast_queue_event("treatment:created", payload, opts)
+  end
+
+  def broadcast_treatment_updated(payload, opts \\ []) do
+    broadcast_queue_event("treatment:updated", payload, opts)
+  end
+
+  defp broadcast_queue_event(event, payload, opts) do
     pubsub = Keyword.get(opts, :pubsub, Phoenix.PubSub)
     topic = "treatments:queue"
 
-    event = %Phoenix.Socket.Broadcast{
+    broadcast = %Phoenix.Socket.Broadcast{
       topic: topic,
-      event: "treatment:created",
+      event: event,
       payload: payload
     }
 
-    case pubsub.broadcast(Chat.PubSub, topic, event) do
+    case pubsub.broadcast(Chat.PubSub, topic, broadcast) do
       :ok -> :ok
-      {:error, reason} -> log_failure("treatment_created", [], inspect(reason))
+      {:error, reason} -> log_failure(log_name(event), [], inspect(reason))
     end
   rescue
-    exception -> log_failure("treatment_created", [], Exception.message(exception))
+    exception ->
+      report_exception(exception, __STACKTRACE__, [])
+      log_failure(log_name(event), [], Exception.message(exception))
   catch
-    :exit, reason -> log_failure("treatment_created", [], inspect(reason))
+    :exit, reason ->
+      report_exit(log_name(event), reason, [])
+      log_failure(log_name(event), [], inspect(reason))
   end
+
+  defp log_name(event), do: String.replace(event, ":", "_")
 
   defp broadcast(room_id, event, event_name, metadata, opts) do
     pubsub = Keyword.get(opts, :pubsub, Phoenix.PubSub)
@@ -229,15 +253,27 @@ defmodule Chat.Broadcaster do
     end
   rescue
     exception ->
+      report_exception(exception, __STACKTRACE__, metadata)
       log_failure(event_name, metadata, Exception.message(exception))
   catch
     :exit, reason ->
+      report_exit(event_name, reason, metadata)
       log_failure(event_name, metadata, inspect(reason))
   end
 
   defp log_failure(event_name, metadata, error) do
     Logger.error("#{event_name} broadcast failed", Keyword.put(metadata, :error, error))
     :ok
+  end
+
+  defp report_exception(exception, stacktrace, metadata) do
+    Sentry.capture_exception(exception, stacktrace: stacktrace, extra: Map.new(metadata))
+  end
+
+  defp report_exit(event_name, reason, metadata) do
+    Sentry.capture_message("#{event_name} broadcast exited",
+      extra: Map.put(Map.new(metadata), :reason, inspect(reason))
+    )
   end
 
   defp topic(room_id), do: "room:#{room_id}"
@@ -251,8 +287,14 @@ defmodule Chat.Broadcaster do
       {:error, reason} -> log_failure(event_name, [user_id: user_id], inspect(reason))
     end
   rescue
-    exception -> log_failure(event_name, [user_id: user_id], Exception.message(exception))
+    exception ->
+      metadata = [user_id: user_id]
+      report_exception(exception, __STACKTRACE__, metadata)
+      log_failure(event_name, metadata, Exception.message(exception))
   catch
-    :exit, reason -> log_failure(event_name, [user_id: user_id], inspect(reason))
+    :exit, reason ->
+      metadata = [user_id: user_id]
+      report_exit(event_name, reason, metadata)
+      log_failure(event_name, metadata, inspect(reason))
   end
 end

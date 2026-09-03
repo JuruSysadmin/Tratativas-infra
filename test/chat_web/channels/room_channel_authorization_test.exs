@@ -1532,7 +1532,9 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
         "attachment_ids" => [attachment.id]
       })
 
-    assert_reply ref, :ok
+    assert_reply ref, :ok, attachment_reply, 1_000
+    assert attachment_reply.content == ""
+    assert attachment_reply.attachments != []
 
     assert_receive {:message_created, %{content: "", attachments: [%{id: attachment_id}]}}
     assert attachment_id == attachment.id

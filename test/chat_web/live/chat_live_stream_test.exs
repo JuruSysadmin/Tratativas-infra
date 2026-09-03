@@ -227,6 +227,53 @@ defmodule ChatWeb.ChatLiveStreamTest do
     assert has_element?(refreshed_view, "#pending-messages", pending_content)
   end
 
+  test "reconnects and reconciles a pending outbox message already persisted by the server", %{
+    conn: conn,
+    room: room,
+    user: user
+  } do
+    client_id = Ecto.UUID.generate()
+    content = "Mensagem recuperada sem duplicidade"
+
+    assert {:ok, persisted_message} =
+             Messages.create_message(
+               %{"content" => content},
+               user.id,
+               room.id,
+               client_id: client_id
+             )
+
+    {:ok, view, _html} = live(conn, ~p"/chat?room_id=#{room.id}")
+    assert has_element?(view, "#connection-status[data-connection-state='connected']")
+    GenServer.stop(view.pid)
+
+    Phoenix.PubSub.subscribe(Chat.PubSub, "room:#{room.id}")
+
+    refreshed_conn =
+      Phoenix.ConnTest.build_conn()
+      |> init_test_session(%{"user_id" => user.id})
+
+    {:ok, refreshed_view, _html} = live(refreshed_conn, ~p"/chat?room_id=#{room.id}")
+
+    assert has_element?(refreshed_view, "#connection-status[data-connection-state='connected']")
+    assert has_element?(refreshed_view, "#messages-list", content)
+
+    render_hook(refreshed_view, "restore_pending_messages", %{
+      "messages" => [%{"client_id" => client_id, "content" => content}]
+    })
+
+    assert eventually(fn ->
+             not has_element?(refreshed_view, "#pending-messages [data-pending-message]")
+           end)
+
+    persisted_id = persisted_message.id
+    assert [%{id: ^persisted_id, client_id: ^client_id}] = Messages.list_messages(room.id)
+
+    html = refreshed_view |> element("#messages-list") |> render()
+    assert [_, _] = String.split(html, content)
+    refute_receive {:message_created, _duplicate}
+  end
+
   test "pending message hook persists and restores browser state" do
     hook = File.read!(Path.expand("../../../assets/js/hooks/pending_messages.js", __DIR__))
 
@@ -286,10 +333,21 @@ defmodule ChatWeb.ChatLiveStreamTest do
     end)
   end
 
-  defp eventually(assertion, attempts \\ 20)
+  defp eventually(assertion, attempts \\ 25)
 
   defp eventually(assertion, attempts) when attempts > 0 do
-    if assertion.(), do: true, else: eventually(assertion, attempts - 1)
+    try do
+      if assertion.() do
+        true
+      else
+        Process.sleep(20)
+        eventually(assertion, attempts - 1)
+      end
+    rescue
+      _ ->
+        Process.sleep(20)
+        eventually(assertion, attempts - 1)
+    end
   end
 
   defp eventually(_assertion, 0), do: false

@@ -6,8 +6,10 @@ defmodule ChatWeb.TreatmentQueueChannelTest do
   alias Chat.Accounts.User
   alias Chat.Auth.Identity
   alias Chat.Repo
+  alias Chat.Rooms
   alias Chat.Treatments
   alias Chat.Treatments.Reason
+  alias ChatWeb.RoomChannel
   alias ChatWeb.TreatmentQueueChannel
   alias ChatWeb.UserSocket
 
@@ -110,6 +112,37 @@ defmodule ChatWeb.TreatmentQueueChannelTest do
 
     assert {:ok, %{treatment: _treatment}} = Treatments.open_for_order(order_id, commercial.id)
     refute_push "treatment:created", _payload
+  end
+
+  test "queue subscribers receive treatment updates when a room transition happens" do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "queue-transition-owner"}, %{})
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_046_004, owner.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+    assert {:ok, %{}, _queue_socket} =
+             UserSocket
+             |> socket("queue-transition-agent", %{current_user: agent})
+             |> subscribe_and_join(TreatmentQueueChannel, "treatments:queue")
+
+    {:ok, _reply, room_socket} =
+      UserSocket
+      |> socket("queue-transition-room", %{current_user: agent})
+      |> subscribe_and_join(RoomChannel, "room:#{room.id}")
+
+    ref = push(room_socket, "treatment:assign_to_me", %{})
+
+    assert_reply ref, :ok, %{treatment_id: treatment_id}
+    assert treatment_id == treatment.id
+
+    assert_push "treatment:updated", payload
+    assert payload.treatment_id == treatment.id
+    assert payload.status == "in_progress"
+    assert payload.assigned_agent_id == agent.id
+    assert payload.order_id == 9_998_046_004
   end
 
   defp logistics_agent_fixture do

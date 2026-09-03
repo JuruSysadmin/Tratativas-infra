@@ -22,6 +22,9 @@ end
 
 config :chat, ChatWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "5000"))]
 
+config :chat, :orders_api,
+  base_url: System.get_env("ORDERS_API_URL", "https://faas.jurunense.com")
+
 if config_env() == :dev do
   Dotenvy.source!([
     Path.expand("../.env", __DIR__),
@@ -64,6 +67,12 @@ if config_env() != :dev and System.get_env("AWS_SESSION_TOKEN") not in [nil, ""]
 end
 
 if config_env() == :prod do
+  sentry_dsn =
+    System.get_env("SENTRY_DSN") ||
+      raise "SENTRY_DSN is missing"
+
+  config :sentry, dsn: sentry_dsn
+
   cors_origins =
     System.get_env("CORS_ORIGINS", "https://vm.jurunense.com")
     |> String.split(",", trim: true)

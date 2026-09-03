@@ -7,6 +7,7 @@ defmodule ChatWeb.UserSocket do
 
   channel "room:*", ChatWeb.RoomChannel
   channel "treatments:queue", ChatWeb.TreatmentQueueChannel
+  channel "user:*", ChatWeb.UserChannel
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) do

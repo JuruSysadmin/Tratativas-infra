@@ -5,7 +5,9 @@ defmodule Chat.Treatments do
 
   alias Chat.Accounts.User
   alias Chat.Broadcaster
+  alias Chat.Orders.Client
   alias Chat.Orders.Mock
+  alias Chat.Realtime.Payloads
   alias Chat.Repo
   alias Chat.Rooms
   alias Chat.Rooms.{MembershipCache, RoomMember}
@@ -68,26 +70,7 @@ defmodule Chat.Treatments do
   defp broadcast_created_treatment(result), do: result
 
   defp broadcast_created_treatment_payload(treatment) do
-    Broadcaster.broadcast_treatment_created(%{
-      treatment_id: treatment.id,
-      room_id: treatment.room_id,
-      order_id: treatment.order_id,
-      protocol: protocol(treatment),
-      status: treatment.status,
-      assigned_agent_id: treatment.assigned_agent_id,
-      assigned_agent_name: nil,
-      can_assign: true,
-      inserted_at: treatment.inserted_at,
-      assigned_at: treatment.assigned_at,
-      reason: treatment_reason_payload(treatment.reason)
-    })
-  end
-
-  defp treatment_reason_payload(nil), do: nil
-  defp treatment_reason_payload(%Ecto.Association.NotLoaded{}), do: nil
-
-  defp treatment_reason_payload(reason) do
-    %{code: reason.code, label: reason.label, priority: reason.priority}
+    Broadcaster.broadcast_treatment_created(Payloads.treatment(treatment))
   end
 
   def intake_state(order_id) when is_integer(order_id) do
@@ -99,58 +82,12 @@ defmodule Chat.Treatments do
 
   def intake_state(_order_id), do: {:error, :invalid_order_id}
 
-  def close(%Treatment{} = treatment, user_id) do
-    case Repo.get(User, user_id) do
-      nil ->
-        {:error, :not_found}
-
-      %User{} = user ->
-        close_for_user(treatment, user)
-    end
-  end
-
-  defp close_for_user(treatment, user) do
-    Rooms.with_member_room(user.id, treatment.room_id, fn _room ->
-      close_persisted_treatment(treatment.id, user)
-    end)
-    |> normalize_transaction_result()
-  end
-
-  defp close_persisted_treatment(treatment_id, user) do
-    persisted_treatment = Repo.get!(Treatment, treatment_id)
-
-    case persisted_treatment.status do
-      "closed" -> Repo.rollback(:invalid_status)
-      _status -> close_active_treatment(persisted_treatment, user)
-    end
-  end
-
-  defp close_active_treatment(treatment, user) do
-    with :ok <- Authorization.authorize_current_operator(user, treatment.assigned_agent_id),
-         {:ok, closed_treatment} <-
-           treatment
-           |> Treatment.changeset(%{status: "closed"})
-           |> Repo.update(),
-         {:ok, _event} <- record_event(closed_treatment, user.id, "treatment_closed") do
-      closed_treatment
-    else
-      {:error, reason} -> Repo.rollback(reason)
-    end
-  end
-
-  def get_preview(treatment_id, %User{} = user) do
+  def get_preview(treatment_id, %User{} = user, authorization_header \\ nil) do
     with {:ok, _} <- Ecto.UUID.cast(treatment_id),
          :ok <- Authorization.authorize(user, "treatment.preview"),
          %Treatment{} = treatment <- Repo.get(Treatment, treatment_id) |> Repo.preload(:reason),
          true <- treatment.status == "open" and is_nil(treatment.assigned_agent_id) do
-      customer_summary =
-        case Mock.get(treatment.order_id) do
-          %{customer_id: id, customer_name: name} ->
-            %{"customer_id" => id, "customer_name" => name}
-
-          _ ->
-            nil
-        end
+      customer_summary = customer_summary(treatment.order_id, authorization_header)
 
       reason_map =
         if treatment.reason do
@@ -180,6 +117,28 @@ defmodule Chat.Treatments do
       {:error, :forbidden} -> {:error, :forbidden}
       nil -> {:error, :not_found}
       false -> {:error, :forbidden}
+    end
+  end
+
+  defp customer_summary(order_id, authorization_header) when is_binary(authorization_header) do
+    case Client.get(order_id, authorization_header) do
+      {:ok, %{customer_id: id, customer_name: name}} ->
+        %{"customer_id" => id, "customer_name" => name}
+
+      _ ->
+        nil
+    end
+  end
+
+  # Direct controller tests do not include a request header. Production
+  # requests always pass through Chat.Auth.Plug before reaching this action.
+  defp customer_summary(order_id, nil) do
+    case Mock.get(order_id) do
+      %{customer_id: id, customer_name: name} ->
+        %{"customer_id" => id, "customer_name" => name}
+
+      _ ->
+        nil
     end
   end
 
@@ -270,6 +229,13 @@ defmodule Chat.Treatments do
   def resolve_for_room(room_id, %User{} = user) do
     Rooms.with_member_room(user.id, room_id, fn _room -> resolve_room_treatment(room_id, user) end)
     |> normalize_member_room_result()
+  end
+
+  def close(%Treatment{id: treatment_id}, %User{} = user) do
+    with :ok <- Authorization.authorize(user, "treatment.close") do
+      Repo.transaction(fn -> close_locked(treatment_id, user) end)
+      |> normalize_confirmation_transaction_result()
+    end
   end
 
   def close_for_room(room_id, %User{} = user) do
@@ -439,7 +405,7 @@ defmodule Chat.Treatments do
       join: r in assoc(t, :room),
       where:
         (t.status == "open" and is_nil(t.assigned_agent_id)) or
-          (t.status in ["in_progress", "resolved", "closed"] and
+          (t.status in ["in_progress", "pending_confirmation", "resolved", "closed"] and
              t.assigned_agent_id == ^user_id),
       preload: [:room, :assigned_agent, :reason],
       order_by: [desc: t.inserted_at, desc: t.id]
@@ -457,7 +423,7 @@ defmodule Chat.Treatments do
   end
 
   defp maybe_filter_queue_status(query, status)
-       when status in ["open", "in_progress", "resolved", "closed"] do
+       when status in ["open", "in_progress", "pending_confirmation", "resolved", "closed"] do
     from(t in query, where: t.status == ^status)
   end
 
@@ -476,7 +442,7 @@ defmodule Chat.Treatments do
     |> then(fn counts ->
       %{
         "active" => Map.get(counts, "open", 0) + Map.get(counts, "in_progress", 0),
-        "resolved" => Map.get(counts, "resolved", 0),
+        "resolved" => Map.get(counts, "pending_confirmation", 0),
         "closed" => Map.get(counts, "closed", 0)
       }
     end)
@@ -740,7 +706,7 @@ defmodule Chat.Treatments do
        do: {:ok, treatment, :idempotent}
 
   defp assign_locked_state(%Treatment{status: status}, _user)
-       when status in ["resolved", "closed"],
+       when status in ["pending_confirmation", "resolved", "closed"],
        do: {:error, :invalid_status}
 
   defp assign_locked_state(%Treatment{assigned_agent_id: assigned_agent_id}, %User{
@@ -861,14 +827,7 @@ defmodule Chat.Treatments do
   defp close_room_treatment(room_id, user) do
     case get_by_room_id(room_id) do
       nil -> {:error, :not_found}
-      %Treatment{id: treatment_id} -> close_result(treatment_id, user)
-    end
-  end
-
-  defp close_result(treatment_id, user) do
-    with :ok <- Authorization.authorize(user, "treatment.close") do
-      Repo.transaction(fn -> close_locked(treatment_id, user) end)
-      |> normalize_confirmation_transaction_result()
+      %Treatment{} = treatment -> close(treatment, user)
     end
   end
 
@@ -1004,7 +963,7 @@ defmodule Chat.Treatments do
       nil ->
         {:error, :not_found}
 
-      %Treatment{status: "resolved"} ->
+      %Treatment{status: status} when status in ["pending_confirmation", "resolved"] ->
         confirm_resolution_locked_and_audit(treatment, user)
 
       %Treatment{} ->
@@ -1148,7 +1107,7 @@ defmodule Chat.Treatments do
         {:error, :not_found}
 
       %Treatment{status: status, assigned_agent_id: assigned_agent_id}
-      when status in ["resolved", "closed"] ->
+      when status in ["pending_confirmation", "resolved", "closed"] ->
         with :ok <- Authorization.authorize_current_operator(user, assigned_agent_id) do
           reopen_locked_and_audit(treatment, user)
         end
@@ -1159,7 +1118,9 @@ defmodule Chat.Treatments do
   end
 
   defp reopen_locked_and_audit(treatment, user) do
-    case treatment |> Treatment.reopen_changeset() |> Repo.update() do
+    paused_seconds = treatment.sla_paused_seconds + pause_duration_seconds(treatment.resolved_at)
+
+    case treatment |> Treatment.reopen_changeset(paused_seconds) |> Repo.update() do
       {:ok, reopened_treatment} ->
         case record_event(reopened_treatment, user.id, "treatment_reopened") do
           {:ok, _event} -> {:ok, reopened_treatment, :reopened}
@@ -1169,6 +1130,12 @@ defmodule Chat.Treatments do
       error ->
         error
     end
+  end
+
+  defp pause_duration_seconds(nil), do: 0
+
+  defp pause_duration_seconds(resolved_at) do
+    max(DateTime.diff(DateTime.utc_now(), resolved_at, :second), 0)
   end
 
   defp authorized_treatment(treatment_id, user_id) do
@@ -1192,11 +1159,6 @@ defmodule Chat.Treatments do
       where: membership.user_id == type(^user_id, :binary_id)
     )
   end
-
-  defp normalize_transaction_result({:ok, {:error, reason}}), do: {:error, reason}
-  defp normalize_transaction_result({:ok, {:ok, result}}), do: {:ok, result}
-  defp normalize_transaction_result({:ok, result}), do: {:ok, result}
-  defp normalize_transaction_result({:error, reason}), do: {:error, reason}
 
   defp normalize_assignment_transaction_result({:ok, {:ok, treatment, result}}),
     do: {:ok, treatment, result}

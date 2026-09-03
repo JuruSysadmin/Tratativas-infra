@@ -1,6 +1,7 @@
 defmodule ChatWeb.OrderConversationControllerTest do
   use ChatWeb.ConnCase, async: false
 
+  alias Chat.Accounts.User
   alias Chat.Auth.Identity
   alias Chat.Repo
   alias Chat.Rooms
@@ -49,7 +50,14 @@ defmodule ChatWeb.OrderConversationControllerTest do
 
     assert %{
              "state" => "missing",
-             "reasons" => [%{"code" => "delivery", "label" => "Entrega"} | _]
+             "reasons" => [
+               %{
+                 "code" => "vehicle_accident",
+                 "label" => "Acidente provocado por veículo da Jurunense",
+                 "priority" => "critical"
+               }
+               | _
+             ]
            } = json_response(conn, 200)
   end
 
@@ -59,7 +67,7 @@ defmodule ChatWeb.OrderConversationControllerTest do
       |> put_req_header("authorization", "Bearer valid-token")
       |> post(~p"/api/treatment-intakes", %{
         order_id: 792,
-        reason_code: "billing",
+        reason_code: "wrong_address",
         initial_description: "Nota fiscal ainda nao foi emitida."
       })
 
@@ -89,7 +97,7 @@ defmodule ChatWeb.OrderConversationControllerTest do
 
     assert {:ok, %{room: room, treatment: treatment}} =
              Treatments.open_structured_for_order(789, user.id, %{
-               reason_code: "delivery",
+               reason_code: "wrong_address",
                initial_description: "Pedido atrasado."
              })
 
@@ -118,8 +126,20 @@ defmodule ChatWeb.OrderConversationControllerTest do
     user: user
   } do
     {:ok, outsider} = Identity.sync_user(%{"sub" => "closed-order-controller-outsider"}, %{})
+
+    agent =
+      %User{}
+      |> User.auth_changeset(%{
+        email: "closed-order-agent-790@example.com",
+        username: "closed-order-agent-790",
+        role: "logistics_agent"
+      })
+      |> Repo.insert!()
+
     {:ok, %{treatment: treatment, room: room}} = Treatments.open_for_order(790, user.id)
-    {:ok, _closed} = Treatments.close(treatment, user.id)
+    {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    {:ok, _closed, :closed} = Treatments.close(assigned, agent)
 
     refute Rooms.room_member?(outsider.id, room.id)
 

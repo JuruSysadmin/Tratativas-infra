@@ -5,8 +5,7 @@ defmodule ChatWeb.RoomChannel do
 
   alias Chat.Accounts
   alias Chat.Messages
-  alias Chat.Messages.Attachments
-  alias Chat.Repo
+  alias Chat.Realtime.Payloads
   alias Chat.Rooms
   alias Chat.Treatments
   alias ChatWeb.Presence
@@ -45,20 +44,20 @@ defmodule ChatWeb.RoomChannel do
 
   def handle_info({:message_deleted, room_id, message_id}, socket) do
     if socket.assigns.room_id == room_id do
-      push(socket, "message:deleted", %{message_id: message_id})
+      push(socket, "message:deleted", Payloads.message_removed(room_id, message_id))
     end
 
     {:noreply, socket}
   end
 
   def handle_info({:message_created, message}, socket) do
-    push(socket, "message:new", message_payload(message))
+    push(socket, "message:new", Payloads.message(message))
     {:noreply, socket}
   end
 
   def handle_info({:message_updated, message}, socket) do
     if socket.assigns.room_id == message.room_id do
-      push(socket, "message:updated", message_payload(message))
+      push(socket, "message:updated", Payloads.message(message))
     end
 
     {:noreply, socket}
@@ -110,8 +109,8 @@ defmodule ChatWeb.RoomChannel do
            client_id: client_id,
            attachment_ids: attachment_ids
          ) do
-      {:ok, _message} ->
-        {:reply, :ok, socket}
+      {:ok, message} ->
+        {:reply, {:ok, Payloads.message(message)}, socket}
 
       {:error, :treatment_closed} ->
         {:reply, {:error, %{reason: "treatment_closed"}}, socket}
@@ -182,8 +181,8 @@ defmodule ChatWeb.RoomChannel do
     user = socket.assigns.current_user
 
     case Messages.delete_own_unread_message(message_id, user.id, socket.assigns.room_id) do
-      {:ok, _message} ->
-        {:reply, :ok, socket}
+      {:ok, message} ->
+        {:reply, {:ok, Payloads.message_removed(message.room_id, message.id)}, socket}
 
       {:error, reason} when reason in [:not_found, :not_member, :not_authorized] ->
         {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
@@ -203,8 +202,8 @@ defmodule ChatWeb.RoomChannel do
     case Messages.edit_own_message(message_id, user.id, socket.assigns.room_id, %{
            "content" => content
          }) do
-      {:ok, _message} ->
-        {:reply, :ok, socket}
+      {:ok, message} ->
+        {:reply, {:ok, Payloads.message(message)}, socket}
 
       {:error, reason} when reason in [:not_found, :not_member, :not_authorized] ->
         {:reply, {:error, %{reason: Atom.to_string(reason)}}, socket}
@@ -230,12 +229,13 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, assigned_treatment, :assigned} ->
-        payload = treatment_assignment_payload(assigned_treatment)
+        payload = Payloads.treatment(assigned_treatment)
         broadcast!(socket, "treatment:agent_assigned", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:ok, assigned_treatment, :idempotent} ->
-        {:reply, {:ok, treatment_assignment_payload(assigned_treatment)}, socket}
+        {:reply, {:ok, Payloads.treatment(assigned_treatment)}, socket}
 
       {:error, reason}
       when reason in [:forbidden, :already_assigned, :not_found, :invalid_status] ->
@@ -255,8 +255,9 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, unassigned_treatment, :unassigned} ->
-        payload = treatment_assignment_state_payload(unassigned_treatment)
+        payload = Payloads.treatment(unassigned_treatment)
         broadcast!(socket, "treatment:unassigned", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:error, reason}
@@ -278,8 +279,9 @@ defmodule ChatWeb.RoomChannel do
     case result do
       {:ok, resolved_treatment, :resolved} ->
         treatment = Treatments.preload_for_presentation(resolved_treatment)
-        payload = treatment_lifecycle_payload(treatment)
+        payload = Payloads.treatment(treatment)
         broadcast!(socket, "treatment:resolved", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:error, reason}
@@ -301,8 +303,9 @@ defmodule ChatWeb.RoomChannel do
     case result do
       {:ok, closed_treatment, :closed} ->
         treatment = Treatments.preload_for_presentation(closed_treatment)
-        payload = treatment_lifecycle_payload(treatment)
+        payload = Payloads.treatment(treatment)
         broadcast!(socket, "treatment:closed", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:error, reason}
@@ -324,8 +327,9 @@ defmodule ChatWeb.RoomChannel do
     case result do
       {:ok, reopened_treatment, :reopened} ->
         treatment = Treatments.preload_for_presentation(reopened_treatment)
-        payload = treatment_lifecycle_payload(treatment)
+        payload = Payloads.treatment(treatment)
         broadcast!(socket, "treatment:reopened", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:error, reason} when reason in [:forbidden, :not_found, :invalid_status] ->
@@ -343,8 +347,9 @@ defmodule ChatWeb.RoomChannel do
          ) do
       {:ok, closed_treatment, :closed} ->
         treatment = Treatments.preload_for_presentation(closed_treatment)
-        payload = treatment_lifecycle_payload(treatment)
+        payload = Payloads.treatment(treatment)
         broadcast!(socket, "treatment:closed", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:error, reason} when reason in [:forbidden, :not_found, :invalid_status] ->
@@ -365,8 +370,9 @@ defmodule ChatWeb.RoomChannel do
 
     case result do
       {:ok, transferred_treatment, :transferred} ->
-        payload = treatment_assignment_state_payload(transferred_treatment)
+        payload = Payloads.treatment(transferred_treatment)
         broadcast!(socket, "treatment:transferred", payload)
+        Chat.Broadcaster.broadcast_treatment_updated(payload)
         {:reply, {:ok, payload}, socket}
 
       {:error, reason}
@@ -416,71 +422,13 @@ defmodule ChatWeb.RoomChannel do
     end
   end
 
-  defp message_payload(message) do
-    %{
-      id: message.id,
-      content: message.content,
-      user: %{
-        id: message.user.id,
-        username: message.user.username
-      },
-      room_id: message.room_id,
-      inserted_at: message.inserted_at,
-      edited_at: message.edited_at,
-      attachments: Attachments.message_payload_attachments(message)
-    }
-  end
-
-  defp treatment_assignment_payload(treatment) do
-    treatment = Repo.preload(treatment, :assigned_agent)
-
-    %{
-      treatment_id: treatment.id,
-      status: treatment.status,
-      assigned_agent_id: treatment.assigned_agent_id,
-      assigned_at: treatment.assigned_at,
-      assigned_agent_username: assigned_agent_username(treatment)
-    }
-  end
-
-  defp treatment_lifecycle_payload(treatment) do
-    %{
-      treatment_id: treatment.id,
-      status: treatment.status,
-      assigned_agent_id: treatment.assigned_agent_id,
-      assigned_agent_username: assigned_agent_username(treatment),
-      assigned_at: treatment.assigned_at,
-      resolved_by_id: treatment.resolved_by_id,
-      resolved_at: treatment.resolved_at,
-      closed_by_id: treatment.closed_by_id,
-      closed_at: treatment.closed_at
-    }
-  end
-
-  defp treatment_assignment_state_payload(treatment) do
-    treatment = Repo.preload(treatment, :assigned_agent)
-
-    %{
-      treatment_id: treatment.id,
-      status: treatment.status,
-      assigned_agent_id: treatment.assigned_agent_id,
-      assigned_at: treatment.assigned_at,
-      assigned_agent_username: assigned_agent_username(treatment)
-    }
-  end
-
   defp treatment_snapshot_payload(room_id) do
     case Treatments.get_by_room_id(room_id) do
       nil ->
-        %{room_id: room_id}
+        %{room_id: room_id, treatment: nil}
 
       treatment ->
-        treatment
-        |> treatment_lifecycle_payload()
-        |> Map.merge(%{
-          id: treatment.id,
-          room_id: room_id
-        })
+        Payloads.treatment(treatment)
     end
   end
 
@@ -489,7 +437,4 @@ defmodule ChatWeb.RoomChannel do
   end
 
   defp valid_message_id?(_message_id), do: false
-
-  defp assigned_agent_username(%{assigned_agent: %{username: username}}), do: username
-  defp assigned_agent_username(_treatment), do: nil
 end

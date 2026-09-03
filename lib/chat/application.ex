@@ -7,6 +7,10 @@ defmodule Chat.Application do
 
   @impl true
   def start(_type, _args) do
+    :logger.add_handler(:chat_sentry_handler, Sentry.LoggerHandler, %{
+      config: %{metadata: [:file, :line]}
+    })
+
     base_children = [
       ChatWeb.Telemetry,
       Chat.Repo,
@@ -15,6 +19,7 @@ defmodule Chat.Application do
       {Phoenix.PubSub, name: Chat.PubSub},
       ChatWeb.Presence,
       Chat.Rooms.MembershipCache,
+      Chat.Orders.CustomerNames,
       # Start a worker by calling: Chat.Worker.start_link(arg)
       # {Chat.Worker, []},
       # Start to serve requests, typically the last entry

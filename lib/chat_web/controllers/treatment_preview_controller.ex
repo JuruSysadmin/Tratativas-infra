@@ -5,8 +5,9 @@ defmodule ChatWeb.TreatmentPreviewController do
 
   def show(conn, %{"treatment_id" => treatment_id}) do
     current_user = conn.assigns.current_user
+    authorization_header = get_req_header(conn, "authorization") |> List.first()
 
-    case Treatments.get_preview(treatment_id, current_user) do
+    case Treatments.get_preview(treatment_id, current_user, authorization_header) do
       {:ok, preview} ->
         json(conn, preview)
 

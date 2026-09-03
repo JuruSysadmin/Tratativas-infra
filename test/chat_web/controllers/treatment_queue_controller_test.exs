@@ -240,7 +240,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert {:ok, assigned} = Treatments.assign_agent(treatment_1, agent)
     assert {:ok, resolved} = Treatments.resolve(assigned, agent)
     assert {:ok, assigned_for_close} = Treatments.assign_agent(treatment_2, agent)
-    assert {:ok, closed} = Treatments.close(assigned_for_close, owner.id)
+    assert {:ok, closed, :closed} = Treatments.close(assigned_for_close, agent)
 
     default_response =
       conn
@@ -280,7 +280,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
 
   test "logistics sees only its resolved and closed treatments in history filters", %{
     conn: conn,
-    owner: owner,
+    owner: _owner,
     agent: agent,
     treatment_1: treatment_1,
     treatment_2: treatment_2
@@ -288,7 +288,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert {:ok, assigned} = Treatments.assign_agent(treatment_1, agent)
     assert {:ok, resolved} = Treatments.resolve(assigned, agent)
     assert {:ok, assigned_for_close} = Treatments.assign_agent(treatment_2, agent)
-    assert {:ok, closed} = Treatments.close(assigned_for_close, owner.id)
+    assert {:ok, closed, :closed} = Treatments.close(assigned_for_close, agent)
 
     resolved_response =
       conn
@@ -313,6 +313,76 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     conn = get(conn, ~p"/api/treatments/queue")
 
     assert response(conn, 401)
+  end
+
+  test "enriches items with the customer name from the orders API", %{
+    conn: conn,
+    agent: agent,
+    owner: owner
+  } do
+    stubbed_order_id = 9_998_046_006
+    headerless_order_id = 9_998_046_007
+
+    assert {:ok, %{treatment: _stubbed_treatment}} =
+             Treatments.open_for_order(stubbed_order_id, owner.id)
+
+    assert {:ok, %{treatment: _headerless_treatment}} =
+             Treatments.open_for_order(headerless_order_id, owner.id)
+
+    stub_context = :"orders_stub_#{System.unique_integer([:positive])}"
+
+    Application.put_env(:chat, :orders_api,
+      base_url: "http://orders.test",
+      request_options: [plug: {Req.Test, stub_context}]
+    )
+
+    on_exit(fn -> Application.delete_env(:chat, :orders_api) end)
+
+    Req.Test.stub(stub_context, fn conn ->
+      %{"orderId" => queried_order_id} = Plug.Conn.fetch_query_params(conn).query_params
+
+      body =
+        if String.to_integer(queried_order_id) == stubbed_order_id do
+          %{
+            "items" => [
+              %{
+                "orderId" => stubbed_order_id,
+                "customerId" => 77,
+                "customerName" => "Maria Cliente"
+              }
+            ]
+          }
+        else
+          %{"items" => []}
+        end
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(200, Jason.encode!(body))
+    end)
+
+    authorized_response =
+      conn
+      |> put_req_header("authorization", "Bearer queue-customer-token")
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{})
+      |> json_response(200)
+
+    authorized_item =
+      Enum.find(authorized_response["items"], &(&1["order_id"] == stubbed_order_id))
+
+    assert authorized_item["customer_name"] == "Maria Cliente"
+
+    headerless_response =
+      build_conn()
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{})
+      |> json_response(200)
+
+    headerless_item =
+      Enum.find(headerless_response["items"], &(&1["order_id"] == headerless_order_id))
+
+    assert is_nil(headerless_item["customer_name"])
   end
 
   defp logistics_agent_fixture(prefix) do

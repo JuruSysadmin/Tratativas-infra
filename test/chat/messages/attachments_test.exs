@@ -121,6 +121,34 @@ defmodule Chat.Messages.AttachmentsTest do
              )
   end
 
+  test "accepts the audio content types supported by the client", %{owner: owner, room: room} do
+    audio_types = [
+      "audio/webm",
+      "audio/mp4",
+      "audio/aac",
+      "audio/ogg",
+      "audio/mpeg",
+      "audio/wav",
+      "audio/x-m4a"
+    ]
+
+    for {content_type, index} <- Enum.with_index(audio_types) do
+      assert {:ok, attachment, _upload_url} =
+               Attachments.presign_upload(
+                 owner.id,
+                 room.id,
+                 %{
+                   "filename" => "voice-#{index}",
+                   "content_type" => content_type,
+                   "size" => 128
+                 },
+                 presigner: Chat.TestSupport.MessageAttachmentPresigner
+               )
+
+      assert attachment.content_type == content_type
+    end
+  end
+
   test "confirms idempotently when Oban already made the attachment available", %{
     owner: owner,
     room: room
@@ -173,15 +201,16 @@ defmodule Chat.Messages.AttachmentsTest do
     assert {:error, :expired} = Attachments.confirm_upload(owner.id, room.id, attachment.id)
   end
 
-  test "persists a message containing only an attachment", %{owner: owner, room: room} do
+  test "persists a message containing only an audio attachment", %{owner: owner, room: room} do
     assert {:ok, attachment, _upload_url} =
              Attachments.presign_upload(
                owner.id,
                room.id,
                %{
-                 "filename" => "documento.pdf",
-                 "content_type" => "application/pdf",
-                 "size" => 128
+                 "filename" => "mensagem.webm",
+                 "content_type" => "audio/webm",
+                 "size" => 128,
+                 "metadata" => %{"duration_seconds" => 42.5}
                },
                presigner: Chat.TestSupport.MessageAttachmentPresigner
              )
@@ -201,6 +230,12 @@ defmodule Chat.Messages.AttachmentsTest do
              )
 
     assert Repo.get!(MessageAttachment, attachment.id).message_id == message.id
+
+    assert %{metadata: %{"duration_seconds" => 42.5}} =
+             Repo.get!(MessageAttachment, attachment.id)
+
+    assert [%{metadata: %{"duration_seconds" => 42.5}}] =
+             Attachments.message_payload_attachments(message)
   end
 
   test "worker accepts an available attachment after it is linked to a message", %{

@@ -32,6 +32,8 @@ config :chat, :cors_origins, ["http://localhost:5173", "https://vm.jurunense.com
 
 config :chat, :auth_login_module, Chat.Auth.E2ELogin
 
+config :chat, :message_attachment_presigner, Chat.TestSupport.MessageAttachmentPresigner
+
 # In test we don't send emails
 config :chat, Chat.Mailer, adapter: Swoosh.Adapters.Test
 

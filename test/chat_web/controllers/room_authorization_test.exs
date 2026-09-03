@@ -97,6 +97,25 @@ defmodule ChatWeb.RoomAuthorizationTest do
     assert %{"messages" => []} = json_response(conn, 200)
   end
 
+  test "message listing includes the nullable client_id contract field", %{
+    conn: conn,
+    owner: owner,
+    room: room
+  } do
+    assert {:ok, message} =
+             Messages.create_message(%{"content" => "Mensagem persistida"}, owner.id, room.id)
+
+    conn =
+      conn
+      |> assign(:current_user, owner)
+      |> MessageController.index(%{"room_id" => room.id})
+
+    assert %{"messages" => [%{"id" => message_id, "client_id" => nil}]} =
+             json_response(conn, 200)
+
+    assert message_id == message.id
+  end
+
   test "message listing rejects a malformed cursor", %{conn: conn, owner: owner, room: room} do
     conn =
       conn

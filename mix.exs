@@ -67,6 +67,7 @@ defmodule Chat.MixProject do
       {:bandit, "~> 1.12"},
       {:joken, "~> 2.6"},
       {:joken_jwks, "~> 1.6"},
+      {:sentry, "~> 13.5"},
       {:tzdata, "~> 1.1"},
       {:ok, "~> 2.3"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

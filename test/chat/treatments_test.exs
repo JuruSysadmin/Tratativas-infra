@@ -32,30 +32,25 @@ defmodule Chat.TreatmentsTest do
   test "opens a treatment with a catalogued reason and initial description", %{user: user} do
     assert {:ok, %{treatment: treatment, room: room}} =
              Treatments.open_structured_for_order(9_998_043_471, user.id, %{
-               reason_code: "delivery",
+               reason_code: "wrong_address",
                initial_description: "Pedido ainda nao foi entregue ao cliente."
              })
 
     assert treatment.status == "open"
     assert treatment.assigned_agent_id == nil
     assert treatment.room_id == room.id
-    assert treatment.reason.code == "delivery"
-    assert treatment.reason.label == "Entrega"
+    assert treatment.reason.code == "wrong_address"
+    assert treatment.reason.label == "Entrega realizada no endereço errado"
     assert treatment.initial_description == "Pedido ainda nao foi entregue ao cliente."
   end
 
   test "reports a missing treatment with active intake reasons" do
     assert {:missing, reasons} = Treatments.intake_state(9_998_043_469)
 
-    assert Enum.map(reasons, &{&1.code, &1.label}) == [
-             {"delivery", "Entrega"},
-             {"stock", "Estoque"},
-             {"billing", "Faturamento"},
-             {"product", "Produto"},
-             {"cancellation", "Cancelamento"},
-             {"divergence", "Divergência"},
-             {"other", "Outro"}
-           ]
+    assert length(reasons) == 27
+    assert hd(reasons).code == "vehicle_accident"
+    assert hd(reasons).priority == "critical"
+    assert Enum.all?(reasons, & &1.active)
   end
 
   test "treatment can exist without an assigned agent", %{user: user} do
@@ -71,7 +66,10 @@ defmodule Chat.TreatmentsTest do
     assert {:ok, %{treatment: treatment, room: room}} =
              Treatments.open_for_order(9_998_045_010, user.id)
 
-    assert {:ok, closed} = Treatments.close(treatment, user.id)
+    agent = logistics_agent_fixture()
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, closed, :closed} = Treatments.close(assigned, agent)
     assert closed.status == "closed"
 
     assert {:ok, %{treatment: reopened, room: reopened_room}} =
@@ -91,7 +89,10 @@ defmodule Chat.TreatmentsTest do
     assert {:ok, %{treatment: treatment, room: room}} =
              Treatments.open_for_order(9_998_045_011, user.id)
 
-    assert {:ok, _closed} = Treatments.close(treatment, user.id)
+    agent = logistics_agent_fixture()
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, _closed, :closed} = Treatments.close(assigned, agent)
     refute Rooms.room_member?(outsider.id, room.id)
 
     assert {:error, :forbidden} = Treatments.open_for_order(treatment.order_id, outsider.id)
@@ -100,11 +101,16 @@ defmodule Chat.TreatmentsTest do
   end
 
   test "closed treatment rejects another close operation", %{user: user} do
-    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_045_012, user.id)
-    assert {:ok, _closed} = Treatments.close(treatment, user.id)
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_045_012, user.id)
 
-    assert {:error, :invalid_status} = Treatments.close(treatment, user.id)
-    assert audit_event_count(treatment, user, "treatment_closed") == 1
+    agent = logistics_agent_fixture()
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, closed, :closed} = Treatments.close(assigned, agent)
+
+    assert {:error, :invalid_status} = Treatments.close(closed, agent)
+    assert audit_event_count(treatment, agent, "treatment_closed") == 1
   end
 
   test "gets a treatment by room id", %{user: user} do
@@ -225,7 +231,7 @@ defmodule Chat.TreatmentsTest do
     assert {:ok, _transferred, :transferred} =
              Treatments.transfer_agent(assigned, current_agent, target_agent)
 
-    assert {:error, :not_assigned_agent} = Treatments.close(assigned, current_agent.id)
+    assert {:error, :not_assigned_agent} = Treatments.close(assigned, current_agent)
     assert Repo.get!(Treatment, treatment.id).status == "in_progress"
   end
 
@@ -361,7 +367,8 @@ defmodule Chat.TreatmentsTest do
             resolved
 
           "closed" ->
-            {:ok, closed} = Treatments.close(treatment, user.id)
+            {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
+            {:ok, closed, :closed} = Treatments.close(assigned, current_agent)
             closed
         end
 
@@ -501,7 +508,8 @@ defmodule Chat.TreatmentsTest do
             resolved
 
           "closed" ->
-            {:ok, closed} = Treatments.close(treatment, user.id)
+            {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+            {:ok, closed, :closed} = Treatments.close(assigned, agent)
             closed
         end
 
@@ -884,13 +892,12 @@ defmodule Chat.TreatmentsTest do
     assert audit_event_count(treatment, owner, "treatment_reopened") == 0
   end
 
-  test "only resolved treatments can be reopened", %{user: owner} do
+  test "only resolved and closed treatments can be reopened", %{user: owner} do
     agent = logistics_agent_fixture()
 
     for {status, order_id} <- [
           {"open", 9_998_043_504},
-          {"in_progress", 9_998_043_505},
-          {"closed", 9_998_043_506}
+          {"in_progress", 9_998_043_505}
         ] do
       assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(order_id, owner.id)
 
@@ -902,10 +909,6 @@ defmodule Chat.TreatmentsTest do
           "in_progress" ->
             assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
             assigned
-
-          "closed" ->
-            assert {:ok, closed} = Treatments.close(treatment, owner.id)
-            closed
         end
 
       assert {:error, :invalid_status} = Treatments.reopen(treatment, owner)
@@ -923,15 +926,15 @@ defmodule Chat.TreatmentsTest do
     assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
     assert {:ok, stale_resolved} = Treatments.resolve(assigned, agent)
 
-    assert {:ok, persisted_closed} =
+    assert {:ok, persisted_in_progress} =
              stale_resolved
-             |> Treatment.changeset(%{status: "closed"})
+             |> Treatment.changeset(%{status: "in_progress"})
              |> Repo.update()
 
     assert stale_resolved.status == "resolved"
-    assert persisted_closed.status == "closed"
+    assert persisted_in_progress.status == "in_progress"
     assert {:error, :invalid_status} = Treatments.reopen(stale_resolved, owner)
-    assert Repo.get!(Treatment, treatment.id).status == "closed"
+    assert Repo.get!(Treatment, treatment.id).status == "in_progress"
     assert audit_event_count(treatment, owner, "treatment_reopened") == 0
   end
 
@@ -1088,8 +1091,13 @@ defmodule Chat.TreatmentsTest do
 
   test "closed treatment cannot be resolved", %{user: user} do
     agent = logistics_agent_fixture()
-    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_494, user.id)
-    assert {:ok, closed} = Treatments.close(treatment, user.id)
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_494, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, closed, :closed} = Treatments.close(assigned, agent)
 
     assert {:error, :invalid_status} = Treatments.resolve(closed, agent)
 
@@ -1248,15 +1256,22 @@ defmodule Chat.TreatmentsTest do
 
   test "cannot assign a treatment outside the open state", %{user: user} do
     agent = logistics_agent_fixture()
-    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_486, user.id)
-    assert {:ok, closed_treatment} = Treatments.close(treatment, user.id)
+    closing_agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_486, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(closing_agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, closing_agent)
+    assert {:ok, closed_treatment, :closed} = Treatments.close(assigned, closing_agent)
 
     assert {:error, :invalid_status} = Treatments.assign_agent(closed_treatment, agent)
 
-    assert %{status: "closed", assigned_agent_id: nil, assigned_at: nil} =
+    assert %{status: "closed", assigned_agent_id: closing_agent_id} =
              Repo.get!(Treatment, treatment.id)
 
-    assert audit_event_count(treatment, user, "treatment_assigned") == 0
+    assert closing_agent_id == closing_agent.id
+    assert audit_event_count(treatment, user, "treatment_assigned") == 1
   end
 
   test "resolved and closed treatments reject assignment", %{user: user} do
@@ -1443,8 +1458,14 @@ defmodule Chat.TreatmentsTest do
   end
 
   test "reuses the protocol without reopening a closed treatment", %{user: user} do
-    assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_471, user.id)
-    assert {:ok, closed_treatment} = Treatments.close(treatment, user.id)
+    agent = logistics_agent_fixture()
+
+    assert {:ok, %{treatment: treatment, room: room}} =
+             Treatments.open_for_order(9_998_043_471, user.id)
+
+    assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+    assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+    assert {:ok, closed_treatment, :closed} = Treatments.close(assigned, agent)
 
     assert {:ok, %{treatment: reopened_treatment}} =
              Treatments.open_for_order(9_998_043_471, user.id)
@@ -1455,6 +1476,7 @@ defmodule Chat.TreatmentsTest do
 
     assert [
              %{event_type: "treatment_closed"},
+             %{event_type: "treatment_assigned"},
              %{event_type: "treatment_created"}
            ] =
              Treatments.list_audit_events(reopened_treatment.id, user.id)
@@ -1761,6 +1783,157 @@ defmodule Chat.TreatmentsTest do
 
       assert transferred.assigned_agent_id == target.id
       assert transferred.status == "in_progress"
+    end
+  end
+
+  describe "close/2" do
+    test "assigned logistics agent can close an in_progress treatment", %{user: owner} do
+      agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_100, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+      assert assigned.status == "in_progress"
+
+      assert {:ok, closed, :closed} = Treatments.close(assigned, agent)
+      assert closed.id == treatment.id
+      assert closed.status == "closed"
+      assert closed.closed_by_id == agent.id
+      assert closed.closed_at != nil
+
+      persisted = Repo.get!(Treatment, treatment.id)
+      assert persisted.status == "closed"
+      assert persisted.closed_by_id == agent.id
+      assert persisted.closed_at != nil
+
+      assert audit_event_count(treatment, agent, "treatment_closed") == 1
+    end
+
+    test "commercial user cannot close a treatment (forbidden)", %{user: owner} do
+      agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_101, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+      assert {:error, :forbidden} = Treatments.close(assigned, owner)
+      assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+      assert audit_event_count(treatment, owner, "treatment_closed") == 0
+    end
+
+    test "unassigned logistics agent cannot close a treatment", %{user: owner} do
+      assigned_agent = logistics_agent_fixture()
+      other_agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_102, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(assigned_agent.id, room.id)
+      assert {:ok, _membership} = Rooms.join_room(other_agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, assigned_agent)
+
+      assert {:error, :not_assigned_agent} = Treatments.close(assigned, other_agent)
+      assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+      assert audit_event_count(treatment, other_agent, "treatment_closed") == 0
+    end
+
+    test "open treatment cannot be closed", %{user: owner} do
+      agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_103, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+
+      assert {:error, :invalid_status} = Treatments.close(treatment, agent)
+      assert Repo.get!(Treatment, treatment.id).status == "open"
+      assert audit_event_count(treatment, agent, "treatment_closed") == 0
+    end
+
+    test "resolved treatment cannot be closed via close/2", %{user: owner} do
+      agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_104, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+      assert {:ok, resolved} = Treatments.resolve(assigned, agent)
+
+      assert {:error, :invalid_status} = Treatments.close(resolved, agent)
+      assert Repo.get!(Treatment, treatment.id).status == "resolved"
+      assert audit_event_count(treatment, agent, "treatment_closed") == 0
+    end
+
+    test "closed treatment rejects repeated close/2 calls", %{user: owner} do
+      agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_105, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+      assert {:ok, closed, :closed} = Treatments.close(assigned, agent)
+
+      assert {:error, :invalid_status} = Treatments.close(closed, agent)
+      assert audit_event_count(treatment, agent, "treatment_closed") == 1
+    end
+
+    test "agent outside room receives not_found", %{user: owner} do
+      assigned_agent = logistics_agent_fixture()
+      outsider_agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_106, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(assigned_agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, assigned_agent)
+
+      assert {:error, :not_found} = Treatments.close(assigned, outsider_agent)
+      assert Repo.get!(Treatment, treatment.id).status == "in_progress"
+      assert audit_event_count(treatment, assigned_agent, "treatment_closed") == 0
+    end
+
+    test "concurrent close allows only the first transition", %{user: owner} do
+      agent = logistics_agent_fixture()
+
+      assert {:ok, %{treatment: treatment, room: room}} =
+               Treatments.open_for_order(9_998_045_107, owner.id)
+
+      assert {:ok, _membership} = Rooms.join_room(agent.id, room.id)
+      assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
+
+      tasks =
+        for _ <- 1..2 do
+          task =
+            Task.async(fn ->
+              receive do
+                :close -> Treatments.close(assigned, agent)
+              end
+            end)
+
+          Sandbox.allow(Repo, self(), task.pid)
+          task
+        end
+
+      Enum.each(tasks, &send(&1.pid, :close))
+
+      outcomes =
+        tasks
+        |> Enum.map(&Task.await(&1, 5_000))
+        |> Enum.map(fn
+          {:ok, _treatment, :closed} -> :closed
+          {:error, :invalid_status} -> :invalid_status
+        end)
+        |> Enum.sort()
+
+      assert [:closed, :invalid_status] = outcomes
+      assert Repo.get!(Treatment, treatment.id).status == "closed"
+      assert audit_event_count(treatment, agent, "treatment_closed") == 1
     end
   end
 

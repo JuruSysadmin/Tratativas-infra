@@ -173,3 +173,56 @@
 2026-08-25T20:56:26Z	JuruSysadmin	created	tratativas-infra/Adicionar-comando-pedido-com-resumo-e-pedidos-relacionados-no-Chat.md	target=priority position=bottom
 2026-08-25T20:56:58Z	JuruSysadmin	estimate	tratativas-infra/Adicionar-comando-pedido-com-resumo-e-pedidos-relacionados-no-Chat.md	5
 2026-08-25T20:57:14Z	JuruSysadmin	started	tratativas-infra/Adicionar-comando-pedido-com-resumo-e-pedidos-relacionados-no-Chat.md	
+2026-08-25T23:14:58Z	assistant	created	tratativas-infra/Integrar-Ollama-local-para-respostas-de-IA-no-Chat.md	
+2026-08-25T23:15:12Z	JuruSysadmin	started	tratativas-infra/Integrar-Ollama-local-para-respostas-de-IA-no-Chat.md	Iniciando integração mínima do Ollama local para um teste de geração de resposta.
+2026-08-25T23:31:22Z	assistant	created	tratativas-infra/Expor-endpoint-autenticado-para-consulta-da-IA-do-Chat.md	
+2026-08-25T23:32:02Z	JuruSysadmin	started	tratativas-infra/Expor-endpoint-autenticado-para-consulta-da-IA-do-Chat.md	Implementando endpoint autenticado para consultar o Ollama sobre tratativas.
+2026-08-25T23:35:01Z	JuruSysadmin	delivered	tratativas-infra/Expor-endpoint-autenticado-para-consulta-da-IA-do-Chat.md	Endpoint autenticado implementado, testes automatizados passando e verificações executadas sem dialyzer. Sobelow mantém alerta CSP preexistente no pipeline browser.
+2026-08-28T02:59:25Z	JuruSysadmin	started	tratativas-infra/Notificar-agentes-de-logstica-sobre-novas-tratativas-em-tempo-real.md	Reabrindo para corrigir o contrato Dialyzer de UserChannel e adicionar cobertura de handle_out/3.
+2026-08-28T15:42:48Z	JuruSysadmin	chore	tratativas-infra/Adicionar-SDK-do-Sentry-ao-backend-Elixir.md	target=priority position=top
+2026-08-28T15:43:10Z	JuruSysadmin	started	tratativas-infra/Adicionar-SDK-do-Sentry-ao-backend-Elixir.md	Instalação solicitada pelo usuário para o backend Elixir.
+2026-08-28T15:44:24Z	JuruSysadmin	accepted	tratativas-infra/Adicionar-SDK-do-Sentry-ao-backend-Elixir.md	
+2026-08-28T15:47:29Z	JuruSysadmin	chore	tratativas-infra/Configurar-captura-de-erros-do-Sentry-em-produo.md	target=priority position=top
+2026-08-28T15:47:37Z	JuruSysadmin	started	tratativas-infra/Configurar-captura-de-erros-do-Sentry-em-produo.md	Configuração solicitada pelo usuário para captura de erros em produção.
+2026-08-28T15:50:45Z	JuruSysadmin	accepted	tratativas-infra/Configurar-captura-de-erros-do-Sentry-em-produo.md	
+2026-08-28T15:58:40Z	JuruSysadmin	chore	tratativas-infra/Capturar-falhas-inesperadas-de-broadcast-no-Sentry.md	target=priority position=top
+2026-08-28T15:58:46Z	JuruSysadmin	started	tratativas-infra/Capturar-falhas-inesperadas-de-broadcast-no-Sentry.md	Aplicação da matriz de captura manual fornecida pelo usuário.
+2026-08-28T16:03:37Z	JuruSysadmin	accepted	tratativas-infra/Capturar-falhas-inesperadas-de-broadcast-no-Sentry.md	
+2026-08-28T16:07:01Z	JuruSysadmin	created	tratativas-infra/Consolidar-contrato-realtime-da-aplicao.md	target=priority position=bottom
+2026-08-28T16:07:31Z	JuruSysadmin	started	tratativas-infra/Consolidar-contrato-realtime-da-aplicao.md	
+2026-08-28T16:21:18Z	JuruSysadmin	delivered	tratativas-infra/Consolidar-contrato-realtime-da-aplicao.md	
+2026-08-28T18:19:15Z	JuruSysadmin	delivered	Cadastrar-motivos-padrao-de-Tratativa.md	Seed idempotente criada e verificada no banco local; regras de escalonamento ficaram fora do escopo por ausência da tabela no schema atual.
+2026-08-29T00:38:27Z	JuruSysadmin	bug	tratativas-infra/Investigar-diagnstico-do-upload-de-anexos-no-frontend.md	target=priority position=top
+2026-08-29T00:38:35Z	JuruSysadmin	started	tratativas-infra/Investigar-diagnstico-do-upload-de-anexos-no-frontend.md	Instrumentar o XHR para identificar status, timeout, abortamento ou bloqueio de rede/CORS sem expor URL assinada.
+2026-08-29T00:41:32Z	JuruSysadmin	delivered	tratativas-infra/Investigar-diagnstico-do-upload-de-anexos-no-frontend.md	
+2026-08-29T00:43:52Z	JuruSysadmin	bug	tratativas-infra/Exibir-miniatura-de-anexos-no-broadcast-realtime.md	target=priority position=top
+2026-08-29T00:43:52Z	JuruSysadmin	started	tratativas-infra/Exibir-miniatura-de-anexos-no-broadcast-realtime.md	O upload e a associação persistem, mas o payload realtime envia download_url nulo.
+2026-08-29T00:45:21Z	JuruSysadmin	delivered	tratativas-infra/Exibir-miniatura-de-anexos-no-broadcast-realtime.md	
+2026-08-29T00:48:59Z	JuruSysadmin	chore	tratativas-infra/Alinhar-schema-de-mensagens-ao-contrato-realtime.md	target=priority position=top
+2026-08-29T00:48:59Z	JuruSysadmin	started	tratativas-infra/Alinhar-schema-de-mensagens-ao-contrato-realtime.md	O schema frontend aceita edited_at ausente e size decimal, embora o contrato realtime exija nullable explícito e inteiro.
+2026-08-29T00:51:22Z	JuruSysadmin	accepted	tratativas-infra/Alinhar-schema-de-mensagens-ao-contrato-realtime.md	
+2026-08-31T14:47:22Z	user	created	tratativas-infra/Suportar-anexos-de-udio-nas-mensagens.md	
+2026-08-31T14:48:11Z	JuruSysadmin	started	tratativas-infra/Suportar-anexos-de-udio-nas-mensagens.md	Alinhamento concluído com os requisitos fornecidos; implementação focada no pipeline existente de attachments, sem infraestrutura específica de áudio.
+2026-08-31T14:54:45Z	JuruSysadmin	delivered	tratativas-infra/Suportar-anexos-de-udio-nas-mensagens.md	Critérios de aceitação implementados e verificados; pronto para revisão do PM.
+2026-08-31T15:11:12Z	user	created	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	
+2026-08-31T15:13:18Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Limite máximo confirmado pelo PM em 10 minutos; implementação iniciada conforme arquitetura da story.
+2026-08-31T15:26:40Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Feature implementada e verificada; pronta para revisão do PM.
+2026-08-31T18:48:49Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Regressão visual confirmada pela captura: regras display sobrescrevem hidden e deixam estados simultâneos visíveis.
+2026-08-31T18:55:19Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Correção pronta e verificada por testes, TypeScript e build. Validação visual final depende da publicação do frontend atualizado no ambiente vm.
+2026-08-31T19:13:18Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Retomada para corrigir estruturalmente a renderização simultânea dos estados e validar no navegador.
+2026-08-31T19:35:49Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Fluxo de envio estilo WhatsApp implementado e validado com testes e Chrome DevTools.
+2026-08-31T19:42:35Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Relatada regressão: gravação deixa de funcionar após envio, provavelmente por desmontagem do VoiceRecorder durante o upload.
+2026-08-31T19:46:32Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Regressão pós-envio corrigida; controller permanece vivo durante o upload.
+2026-08-31T19:50:59Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Correção direta do seletor CSS que mantém o indicador de envio visível em idle.
+2026-08-31T19:51:53Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Indicador de envio persistente corrigido diretamente no CSS.
+2026-08-31T21:16:32Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Iniciada correção dos arquivos WebM inválidos/não seekable identificados no review e no Chrome DevTools.
+2026-08-31T21:21:12Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Principais falhas de contêiner WebM, blobs vazios e Promise de finish corrigidas; validações de qualidade concluídas.
+2026-08-31T21:28:31Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Produto definiu os layouts finais para GRAVANDO e PAUSADO / PREVIEW.
+2026-08-31T21:30:25Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Layout final de gravação e preview implementado e validado.
+2026-08-31T21:39:27Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Waveform visual final implementado com amplitude real; wavesurfer.js avaliado e não adicionado.
+2026-08-31T21:41:28Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Último refinamento visual desfeito; fluxo anterior restaurado.
+2026-08-31T21:46:03Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Layout da mensagem de áudio alinhado à referência com meta no rodapé da bolha.
+2026-08-31T21:59:03Z	JuruSysadmin	started	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Aplicando os padrões confirmados pelo MCP Carbon ao composer e ao envio de áudio.
+2026-08-31T22:02:24Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Padrões Carbon do MCP aplicados ao estado de envio do composer.
+2026-09-01T03:11:21Z	JuruSysadmin	created	tratativas-infra/Refatorar-correo-de-durao-WebM-migrar-de-fix-webm-duration-para-fix-webm-duration-fix.md	
+2026-09-01T03:14:16Z	JuruSysadmin	started	tratativas-infra/Refatorar-correo-de-durao-WebM-migrar-de-fix-webm-duration-para-fix-webm-duration-fix.md	

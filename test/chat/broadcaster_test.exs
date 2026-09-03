@@ -112,4 +112,40 @@ defmodule Chat.BroadcasterTest do
     assert log =~ "message_created broadcast failed"
     assert log =~ "no_such_group"
   end
+
+  test "broadcasts treatment lifecycle events to the queue topic" do
+    created = %{treatment_id: Ecto.UUID.generate(), status: "open"}
+    updated = %{treatment_id: created.treatment_id, status: "in_progress"}
+
+    Phoenix.PubSub.subscribe(Chat.PubSub, "treatments:queue")
+
+    assert :ok = Broadcaster.broadcast_treatment_created(created)
+
+    assert_receive %Phoenix.Socket.Broadcast{
+      topic: "treatments:queue",
+      event: "treatment:created",
+      payload: ^created
+    }
+
+    assert :ok = Broadcaster.broadcast_treatment_updated(updated)
+
+    assert_receive %Phoenix.Socket.Broadcast{
+      topic: "treatments:queue",
+      event: "treatment:updated",
+      payload: ^updated
+    }
+  end
+
+  test "treatment update broadcast error is logged without escaping" do
+    log =
+      capture_log(fn ->
+        assert :ok =
+                 Broadcaster.broadcast_treatment_updated(%{treatment_id: Ecto.UUID.generate()},
+                   pubsub: Chat.BroadcastErrorStub
+                 )
+      end)
+
+    assert log =~ "treatment_updated broadcast failed"
+    assert log =~ "no_such_group"
+  end
 end

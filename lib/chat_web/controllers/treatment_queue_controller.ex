@@ -11,6 +11,11 @@ defmodule ChatWeb.TreatmentQueueController do
 
     case Treatments.list_queue(user, params) do
       {:ok, %{items: treatments, pagination: pagination, counts: counts}} ->
+        customer_names =
+          treatments
+          |> Enum.map(& &1.order_id)
+          |> Chat.Orders.CustomerNames.resolve(authorization_header(conn))
+
         items =
           Enum.map(treatments, fn t ->
             %{
@@ -21,6 +26,7 @@ defmodule ChatWeb.TreatmentQueueController do
               status: t.status,
               assigned_agent_id: t.assigned_agent_id,
               assigned_agent_name: if(t.assigned_agent, do: t.assigned_agent.username, else: nil),
+              customer_name: Map.get(customer_names, t.order_id),
               reason:
                 if(t.reason,
                   do: %{code: t.reason.code, label: t.reason.label, priority: t.reason.priority},
@@ -49,5 +55,11 @@ defmodule ChatWeb.TreatmentQueueController do
         |> put_status(:bad_request)
         |> json(%{error: "invalid_cursor", message: "cursor is invalid"})
     end
+  end
+
+  defp authorization_header(conn) do
+    conn
+    |> get_req_header("authorization")
+    |> List.first()
   end
 end

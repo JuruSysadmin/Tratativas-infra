@@ -7,6 +7,7 @@ defmodule ChatWeb.MessageController do
   alias Chat.Messages.Attachments
   alias Chat.Repo
   alias Chat.Rooms
+  alias Chat.Realtime.Payloads
 
   def index(conn, %{"room_id" => room_id} = params) do
     user = conn.assigns.current_user
@@ -29,14 +30,15 @@ defmodule ChatWeb.MessageController do
         Enum.map(messages, fn msg ->
           %{
             id: msg.id,
+            client_id: msg.client_id,
             content: msg.content,
             user: %{
               id: msg.user.id,
               username: msg.user.username
             },
             room_id: msg.room_id,
-            inserted_at: msg.inserted_at,
-            edited_at: msg.edited_at,
+            inserted_at: Payloads.iso8601_timestamp(msg.inserted_at),
+            edited_at: Payloads.iso8601_timestamp(msg.edited_at),
             attachments: Attachments.message_payload_attachments(msg)
           }
         end)
@@ -105,14 +107,15 @@ defmodule ChatWeb.MessageController do
         |> json(%{
           message: %{
             id: message.id,
+            client_id: message.client_id,
             content: message.content,
             user: %{
               id: message.user.id,
               username: message.user.username
             },
             room_id: message.room_id,
-            inserted_at: message.inserted_at,
-            edited_at: message.edited_at,
+            inserted_at: Payloads.iso8601_timestamp(message.inserted_at),
+            edited_at: Payloads.iso8601_timestamp(message.edited_at),
             attachments: Attachments.message_payload_attachments(message)
           }
         })
