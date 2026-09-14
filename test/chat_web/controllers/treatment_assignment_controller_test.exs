@@ -49,6 +49,25 @@ defmodule ChatWeb.TreatmentAssignmentControllerTest do
     assert Repo.get!(Chat.Treatments.Treatment, treatment.id).status == "in_progress"
   end
 
+  test "notifies the treatment creator when logistics assumes it", %{conn: conn} do
+    {:ok, owner} = Identity.sync_user(%{"sub" => "assignment-notification-owner"}, %{})
+    agent = logistics_agent_fixture()
+    {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_045_006, owner.id)
+    Phoenix.PubSub.subscribe(Chat.PubSub, "user:#{owner.id}")
+    Phoenix.PubSub.subscribe(Chat.PubSub, "user:#{agent.id}")
+
+    conn =
+      conn
+      |> assign(:current_user, agent)
+      |> TreatmentAssignmentController.create(%{"treatment_id" => treatment.id})
+
+    assert response(conn, 200)
+    assert_receive {:treatment_assigned, payload}
+    assert payload.treatment_id == treatment.id
+    assert payload.room_id == treatment.room_id
+    refute_receive {:treatment_assigned, _payload}
+  end
+
   test "broadcasts the canonical treatment update to the queue topic", %{conn: conn} do
     {:ok, owner} = Identity.sync_user(%{"sub" => "queue-update-owner"}, %{})
     agent = logistics_agent_fixture()

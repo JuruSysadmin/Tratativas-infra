@@ -74,7 +74,10 @@ if config_env() == :prod do
   config :sentry, dsn: sentry_dsn
 
   cors_origins =
-    System.get_env("CORS_ORIGINS", "https://vm.jurunense.com")
+    System.get_env(
+      "CORS_ORIGINS",
+      "https://vm.jurunense.com,https://portalweb.jurunense.com"
+    )
     |> String.split(",", trim: true)
     |> Enum.map(&String.trim/1)
 

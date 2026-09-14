@@ -44,6 +44,40 @@ defmodule ChatWeb.UserChannelTest do
     assert_push "room:message:new", %{room_id: _, message_id: _}
   end
 
+  test "forwards mention events to the connected user" do
+    user = user_fixture("private-channel-mention-recipient")
+
+    assert {:ok, %{}, _socket} =
+             UserSocket
+             |> socket("private-channel-mention-recipient", %{current_user: user})
+             |> subscribe_and_join(UserChannel, "user:#{user.id}")
+
+    payload = %{room_id: Ecto.UUID.generate(), message_id: Ecto.UUID.generate()}
+
+    Phoenix.PubSub.broadcast(Chat.PubSub, "user:#{user.id}", {:mention_created, payload})
+
+    assert_push "mention:created", ^payload
+  end
+
+  test "forwards treatment assignment events to the connected user" do
+    user = user_fixture("private-channel-assignment-recipient")
+
+    assert {:ok, %{}, _socket} =
+             UserSocket
+             |> socket("private-channel-assignment-recipient", %{current_user: user})
+             |> subscribe_and_join(UserChannel, "user:#{user.id}")
+
+    payload = %{treatment_id: Ecto.UUID.generate(), room_id: Ecto.UUID.generate()}
+
+    Phoenix.PubSub.broadcast(
+      Chat.PubSub,
+      "user:#{user.id}",
+      {:treatment_assigned, payload}
+    )
+
+    assert_push "treatment:assigned", ^payload
+  end
+
   test "handle_out forwards the event and preserves the socket" do
     user = user_fixture("private-channel-handle-out")
 

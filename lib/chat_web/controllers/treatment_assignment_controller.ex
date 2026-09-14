@@ -5,6 +5,7 @@ defmodule ChatWeb.TreatmentAssignmentController do
 
   alias Chat.Broadcaster
   alias Chat.Realtime.Payloads
+  alias Chat.Rooms
   alias Chat.Treatments
 
   def create(conn, %{"treatment_id" => treatment_id}) do
@@ -14,6 +15,7 @@ defmodule ChatWeb.TreatmentAssignmentController do
       {:ok, treatment, :assigned} ->
         payload = assignment_payload(treatment)
         Broadcaster.broadcast_treatment_assigned(treatment.room_id, payload)
+        notify_treatment_creator(treatment, payload)
         Broadcaster.broadcast_treatment_updated(Payloads.treatment(treatment))
         json(conn, payload)
 
@@ -43,6 +45,19 @@ defmodule ChatWeb.TreatmentAssignmentController do
       sla_paused_seconds: treatment.sla_paused_seconds,
       assigned_agent_username: treatment.assigned_agent.username
     }
+  end
+
+  defp notify_treatment_creator(treatment, payload) do
+    room = Rooms.get_room!(treatment.room_id)
+
+    Broadcaster.broadcast_treatment_assigned_to_user(room.creator_id, %{
+      treatment_id: payload.treatment_id,
+      room_id: treatment.room_id,
+      order_id: room.order_id,
+      assigned_agent_id: payload.assigned_agent_id,
+      assigned_agent_username: payload.assigned_agent_username,
+      assigned_at: payload.assigned_at
+    })
   end
 
   defp status_for(:forbidden), do: :forbidden

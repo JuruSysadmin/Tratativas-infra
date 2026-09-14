@@ -25,7 +25,7 @@ config :chat, ChatWeb.Endpoint,
     esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]}
   ]
 
-config :chat, :cors_origins, ["http://localhost:5173", "https://vm.jurunense.com","https://humand.jurunense.com", "https://www.jurunense.com"]
+config :chat, :cors_origins, ["http://localhost:5173", "https://vm.jurunense.com","https://humand.jurunense.com", "https://www.jurunense.com", "https://portalweb.jurunense.com"]
 
 config :chat, :auth,
   server_url: System.get_env("AUTH_SERVER_URL", "https://api.auth.jurunense.com"),

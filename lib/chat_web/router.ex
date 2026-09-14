@@ -68,6 +68,8 @@ defmodule ChatWeb.Router do
     get "/treatment-intakes/:order_id", TreatmentIntakeController, :show
     post "/treatment-intakes", TreatmentIntakeController, :create
     get "/treatments/queue", TreatmentQueueController, :index
+    get "/notifications/mentions", MentionNotificationController, :index
+    post "/notifications/mentions/read", MentionNotificationController, :mark_read
     post "/treatments/:treatment_id/assign-to-me", TreatmentAssignmentController, :create
     get "/treatments/:treatment_id/preview", TreatmentPreviewController, :show
 

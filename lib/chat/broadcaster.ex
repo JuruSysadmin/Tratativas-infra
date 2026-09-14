@@ -204,6 +204,15 @@ defmodule Chat.Broadcaster do
     )
   end
 
+  def broadcast_treatment_assigned_to_user(user_id, payload, opts \\ []) do
+    broadcast_user_event(
+      user_id,
+      {:treatment_assigned, payload},
+      "treatment_assigned",
+      opts
+    )
+  end
+
   def broadcast_treatment_created(payload, opts \\ []) do
     broadcast_queue_event("treatment:created", payload, opts)
   end

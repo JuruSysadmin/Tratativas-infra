@@ -6,6 +6,13 @@ defmodule ChatWeb.Cors do
   @allow_methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
   @allow_headers "accept, authorization, content-type, origin"
 
+  # Always allowed, independent of the CORS_ORIGINS env var, so a stale or
+  # partial env config can never silently break the browser-facing portals.
+  @baseline_origins [
+    "https://vm.jurunense.com",
+    "https://portalweb.jurunense.com"
+  ]
+
   def init(opts), do: opts
 
   def call(conn, _opts) do
@@ -33,7 +40,7 @@ defmodule ChatWeb.Cors do
   end
 
   defp allowed_origin?(origin) when is_binary(origin) do
-    origin in Application.get_env(:chat, :cors_origins, [])
+    origin in @baseline_origins or origin in Application.get_env(:chat, :cors_origins, [])
   end
 
   defp allowed_origin?(_origin), do: false
