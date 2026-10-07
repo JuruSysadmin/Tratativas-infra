@@ -19,6 +19,7 @@ defmodule Chat.Application do
       {Phoenix.PubSub, name: Chat.PubSub},
       ChatWeb.Presence,
       Chat.Rooms.MembershipCache,
+      Chat.Auth.IdentityCache,
       Chat.Orders.CustomerNames,
       # Start a worker by calling: Chat.Worker.start_link(arg)
       # {Chat.Worker, []},

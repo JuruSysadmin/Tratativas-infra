@@ -346,7 +346,7 @@ defmodule Chat.TreatmentsTest do
 
     for {status, order_id} <- [
           {"open", 9_998_043_535},
-          {"resolved", 9_998_043_536},
+          {"pending_confirmation", 9_998_043_536},
           {"closed", 9_998_043_537}
         ] do
       assert {:ok, %{treatment: treatment, room: room}} =
@@ -361,7 +361,7 @@ defmodule Chat.TreatmentsTest do
           "open" ->
             treatment
 
-          "resolved" ->
+          "pending_confirmation" ->
             {:ok, assigned} = Treatments.assign_agent(treatment, current_agent)
             {:ok, resolved} = Treatments.resolve(assigned, current_agent)
             resolved
@@ -489,7 +489,7 @@ defmodule Chat.TreatmentsTest do
 
     for {status, order_id} <- [
           {"open", 9_998_043_516},
-          {"resolved", 9_998_043_517},
+          {"pending_confirmation", 9_998_043_517},
           {"closed", 9_998_043_518}
         ] do
       assert {:ok, %{treatment: treatment, room: room}} =
@@ -502,7 +502,7 @@ defmodule Chat.TreatmentsTest do
           "open" ->
             treatment
 
-          "resolved" ->
+          "pending_confirmation" ->
             {:ok, assigned} = Treatments.assign_agent(treatment, agent)
             {:ok, resolved} = Treatments.resolve(assigned, agent)
             resolved
@@ -761,12 +761,12 @@ defmodule Chat.TreatmentsTest do
 
     assert {:ok, resolved} = Treatments.resolve(assigned, agent)
 
-    assert resolved.status == "resolved"
+    assert resolved.status == "pending_confirmation"
     assert resolved.resolved_by_id == agent.id
     assert resolved.resolved_at != nil
 
     assert %{
-             status: "resolved",
+             status: "pending_confirmation",
              resolved_by_id: resolved_by_id,
              resolved_at: resolved_at,
              assigned_agent_id: assigned_agent_id,
@@ -835,7 +835,11 @@ defmodule Chat.TreatmentsTest do
 
     assert {:error, :forbidden} = Treatments.reopen(resolved, unauthorized)
 
-    assert %{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at} =
+    assert %{
+             status: "pending_confirmation",
+             resolved_by_id: resolved_by_id,
+             resolved_at: resolved_at
+           } =
              Repo.get!(Treatment, treatment.id)
 
     assert resolved_by_id == resolved.resolved_by_id
@@ -860,7 +864,7 @@ defmodule Chat.TreatmentsTest do
     assert {:error, :not_found} = Treatments.reopen(resolved, outsider)
 
     assert %{
-             status: "resolved",
+             status: "pending_confirmation",
              assigned_agent_id: assigned_agent_id,
              assigned_at: assigned_at,
              resolved_by_id: resolved_by_id,
@@ -931,7 +935,7 @@ defmodule Chat.TreatmentsTest do
              |> Treatment.changeset(%{status: "in_progress"})
              |> Repo.update()
 
-    assert stale_resolved.status == "resolved"
+    assert stale_resolved.status == "pending_confirmation"
     assert persisted_in_progress.status == "in_progress"
     assert {:error, :invalid_status} = Treatments.reopen(stale_resolved, owner)
     assert Repo.get!(Treatment, treatment.id).status == "in_progress"
@@ -960,7 +964,7 @@ defmodule Chat.TreatmentsTest do
     assert "forced audit failure" in errors_on(changeset).event_type
 
     assert %{
-             status: "resolved",
+             status: "pending_confirmation",
              assigned_agent_id: assigned_agent_id,
              assigned_at: assigned_at,
              resolved_by_id: resolved_by_id,
@@ -1029,7 +1033,7 @@ defmodule Chat.TreatmentsTest do
 
     assert {:ok, resolved, :resolved} = Treatments.resolve_for_room(room.id, agent)
     assert resolved.id == assigned.id
-    assert resolved.status == "resolved"
+    assert resolved.status == "pending_confirmation"
 
     assert {:error, :invalid_status} = Treatments.resolve_for_room(room.id, agent)
   end
@@ -1073,7 +1077,7 @@ defmodule Chat.TreatmentsTest do
     assert audit_event_count(treatment, user, "treatment_resolved") == 0
   end
 
-  test "resolved treatment cannot be resolved again", %{user: user} do
+  test "pending_confirmation treatment cannot be resolved again", %{user: user} do
     agent = logistics_agent_fixture()
     assert {:ok, %{treatment: treatment}} = Treatments.open_for_order(9_998_043_493, user.id)
     assert {:ok, assigned} = Treatments.assign_agent(treatment, agent)
@@ -1082,7 +1086,7 @@ defmodule Chat.TreatmentsTest do
     assert {:error, :invalid_status} = Treatments.resolve(resolved, agent)
     agent_id = agent.id
 
-    assert %{status: "resolved", resolved_by_id: ^agent_id, resolved_at: resolved_at} =
+    assert %{status: "pending_confirmation", resolved_by_id: ^agent_id, resolved_at: resolved_at} =
              Repo.get!(Treatment, treatment.id)
 
     assert resolved_at == resolved.resolved_at
@@ -1148,7 +1152,10 @@ defmodule Chat.TreatmentsTest do
 
     assert [:invalid_status, :ok] = outcomes
     agent_id = agent.id
-    assert %{status: "resolved", resolved_by_id: ^agent_id} = Repo.get!(Treatment, treatment.id)
+
+    assert %{status: "pending_confirmation", resolved_by_id: ^agent_id} =
+             Repo.get!(Treatment, treatment.id)
+
     assert audit_event_count(treatment, user, "treatment_resolved") == 1
   end
 
@@ -1854,7 +1861,7 @@ defmodule Chat.TreatmentsTest do
       assert audit_event_count(treatment, agent, "treatment_closed") == 0
     end
 
-    test "resolved treatment cannot be closed via close/2", %{user: owner} do
+    test "pending_confirmation treatment cannot be closed via close/2", %{user: owner} do
       agent = logistics_agent_fixture()
 
       assert {:ok, %{treatment: treatment, room: room}} =
@@ -1865,7 +1872,7 @@ defmodule Chat.TreatmentsTest do
       assert {:ok, resolved} = Treatments.resolve(assigned, agent)
 
       assert {:error, :invalid_status} = Treatments.close(resolved, agent)
-      assert Repo.get!(Treatment, treatment.id).status == "resolved"
+      assert Repo.get!(Treatment, treatment.id).status == "pending_confirmation"
       assert audit_event_count(treatment, agent, "treatment_closed") == 0
     end
 

@@ -31,10 +31,8 @@ defmodule Chat.Auth.TokenClaimsTest do
     refute function_exported?(Token, :verify_hmac, 1)
     refute function_exported?(Token, :get_user_id, 1)
 
-    login_live = File.read!(Path.expand("../../../lib/chat_web/live/login_live.ex", __DIR__))
-    refute login_live =~ "Token.generate"
-    refute login_live =~ "authenticate_by_username"
-    refute login_live =~ "?token="
+    refute Code.ensure_loaded?(ChatWeb.LoginLive)
+    refute Code.ensure_loaded?(ChatWeb.SessionController)
     refute function_exported?(Accounts, :create_user, 1)
     refute function_exported?(Accounts, :authenticate_user, 2)
     refute function_exported?(Accounts, :authenticate_by_username, 2)

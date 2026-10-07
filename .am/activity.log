@@ -226,3 +226,29 @@
 2026-08-31T22:02:24Z	JuruSysadmin	delivered	tratativas-infra/Gravar-enviar-e-reproduzir-mensagens-de-udio.md	Padrões Carbon do MCP aplicados ao estado de envio do composer.
 2026-09-01T03:11:21Z	JuruSysadmin	created	tratativas-infra/Refatorar-correo-de-durao-WebM-migrar-de-fix-webm-duration-para-fix-webm-duration-fix.md	
 2026-09-01T03:14:16Z	JuruSysadmin	started	tratativas-infra/Refatorar-correo-de-durao-WebM-migrar-de-fix-webm-duration-para-fix-webm-duration-fix.md	
+2026-09-18T00:20:24Z	JuruSysadmin	chore	tratativas-infra/Remover-UI-LiveView-legado-manter-API-e-Channels-para-o-React.md	target=priority position=top
+2026-09-18T00:20:33Z	JuruSysadmin	started	tratativas-infra/Remover-UI-LiveView-legado-manter-API-e-Channels-para-o-React.md	
+2026-09-18T00:24:32Z	JuruSysadmin	accepted	tratativas-infra/Remover-UI-LiveView-legado-manter-API-e-Channels-para-o-React.md	
+2026-09-18T00:24:32Z	JuruSysadmin	accepted	tratativas-infra/Remover-UI-LiveView-legado-manter-API-e-Channels-para-o-React.md	LiveView product UI removed; API/Channels/Presence retained. Host is API-only. Pre-existing treatments pending_confirmation vs resolved test drift left untouched.
+2026-09-18T00:47:02Z	JuruSysadmin	chore	tratativas-infra/Alinhar-testes-e-contrato-realtime-ao-status-pending-confirmation.md	target=priority position=top
+2026-09-23T13:27:46Z	JuruSysadmin	started	tratativas-infra/Alinhar-testes-e-contrato-realtime-ao-status-pending-confirmation.md	
+2026-10-06T15:48:11Z	JuruSysadmin	chore	tratativas-infra/Fila-de-tratativas-nao-bloqueia-em-CustomerNames-Orders-API.md	target=priority position=top
+2026-10-06T15:48:24Z	JuruSysadmin	started	tratativas-infra/Fila-de-tratativas-nao-bloqueia-em-CustomerNames-Orders-API.md	
+2026-10-06T15:58:19Z	JuruSysadmin	accepted	tratativas-infra/Fila-de-tratativas-nao-bloqueia-em-CustomerNames-Orders-API.md	
+2026-10-06T15:58:19Z	JuruSysadmin	accepted	tratativas-infra/Fila-de-tratativas-nao-bloqueia-em-CustomerNames-Orders-API.md	
+2026-10-06T16:06:27Z	JuruSysadmin	bug	tratativas-infra/Fila-logistica-nao-atualiza-em-tempo-real-sem-F5.md	target=priority position=top
+2026-10-06T16:06:35Z	JuruSysadmin	started	tratativas-infra/Fila-logistica-nao-atualiza-em-tempo-real-sem-F5.md	
+2026-10-06T16:08:02Z	JuruSysadmin	finished	tratativas-infra/Fila-logistica-nao-atualiza-em-tempo-real-sem-F5.md	
+2026-10-06T16:08:02Z	JuruSysadmin	delivered	tratativas-infra/Fila-logistica-nao-atualiza-em-tempo-real-sem-F5.md	
+2026-10-07T18:57:42Z	JuruSysadmin	chore	tratativas-infra/Queue-counts-SQL-e-warm-async-CustomerNames.md	target=priority position=top
+2026-10-07T18:57:59Z	JuruSysadmin	started	tratativas-infra/Queue-counts-SQL-e-warm-async-CustomerNames.md	
+2026-10-07T18:59:30Z	JuruSysadmin	accepted	tratativas-infra/Queue-counts-SQL-e-warm-async-CustomerNames.md	
+2026-10-07T18:59:30Z	JuruSysadmin	accepted	tratativas-infra/Queue-counts-SQL-e-warm-async-CustomerNames.md	
+2026-10-07T19:22:46Z	JuruSysadmin	chore	tratativas-infra/Cache-de-identidade-evita-sync-DB-a-cada-request-REST.md	target=priority position=top
+2026-10-07T19:22:46Z	JuruSysadmin	started	tratativas-infra/Cache-de-identidade-evita-sync-DB-a-cada-request-REST.md	
+2026-10-07T19:23:53Z	JuruSysadmin	accepted	tratativas-infra/Cache-de-identidade-evita-sync-DB-a-cada-request-REST.md	
+2026-10-07T19:23:53Z	JuruSysadmin	accepted	tratativas-infra/Cache-de-identidade-evita-sync-DB-a-cada-request-REST.md	
+2026-10-07T19:43:27Z	JuruSysadmin	chore	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	target=priority position=top
+2026-10-07T19:43:27Z	JuruSysadmin	started	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	
+2026-10-07T19:45:16Z	JuruSysadmin	accepted	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	
+2026-10-07T19:45:16Z	JuruSysadmin	accepted	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	

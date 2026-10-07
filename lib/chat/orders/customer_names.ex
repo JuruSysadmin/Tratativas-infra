@@ -28,11 +28,7 @@ defmodule Chat.Orders.CustomerNames do
   """
   @spec resolve([integer()] | integer(), String.t() | nil) :: %{integer() => String.t()}
   def resolve(order_ids, authorization_header) do
-    ids =
-      order_ids
-      |> List.wrap()
-      |> Enum.uniq()
-      |> Enum.filter(&is_integer/1)
+    ids = normalize_ids(order_ids)
 
     {cached_names, missing_ids} =
       ids
@@ -42,6 +38,52 @@ defmodule Chat.Orders.CustomerNames do
     fetched_names = fetch_missing(Enum.map(missing_ids, &elem(&1, 0)), authorization_header)
 
     Map.merge(Map.new(cached_names), fetched_names)
+  end
+
+  @doc """
+  Returns only names already present in the TTL cache. Never calls the Orders API.
+
+  Used by the treatment queue so a slow/down FaaS cannot block `GET /queue`.
+  Cache misses yield `nil` at the JSON boundary (`customer_name: null`).
+  """
+  @spec resolve_cached([integer()] | integer()) :: %{integer() => String.t()}
+  def resolve_cached(order_ids) do
+    order_ids
+    |> normalize_ids()
+    |> Enum.reduce(%{}, fn order_id, acc ->
+      case cached_name(order_id) do
+        name when is_binary(name) -> Map.put(acc, order_id, name)
+        _ -> acc
+      end
+    end)
+  end
+
+  @doc """
+  Fetches cache misses from the Orders API in a background task.
+
+  Meant to run after the queue response so the next poll/realtime refresh can
+  serve names from ETS without blocking the request path.
+  """
+  @spec warm_async([integer()] | integer(), String.t() | nil, keyword()) :: :ok
+  def warm_async(order_ids, authorization_header, opts \\ []) do
+    missing_ids =
+      order_ids
+      |> normalize_ids()
+      |> Enum.reject(fn order_id -> is_binary(cached_name(order_id)) end)
+
+    if missing_ids != [] and is_binary(authorization_header) do
+      starter = Keyword.get(opts, :task_starter, &Task.start/1)
+      _ = starter.(fn -> resolve(missing_ids, authorization_header) end)
+    end
+
+    :ok
+  end
+
+  defp normalize_ids(order_ids) do
+    order_ids
+    |> List.wrap()
+    |> Enum.uniq()
+    |> Enum.filter(&is_integer/1)
   end
 
   defp cached_name(order_id) do

@@ -1,9 +1,15 @@
 defmodule Chat.Auth.IdentityTest do
-  use Chat.DataCase, async: true
+  use Chat.DataCase, async: false
 
   alias Chat.Accounts
   alias Chat.Accounts.User
   alias Chat.Auth.Identity
+  alias Chat.Auth.IdentityCache
+
+  setup do
+    IdentityCache.clear()
+    :ok
+  end
 
   test "synchronizes validated external claims into an Ecto user" do
     claims = %{
@@ -153,5 +159,33 @@ defmodule Chat.Auth.IdentityTest do
 
     assert {:ok, updated_user} = Accounts.update_user(user, %{status: "away"})
     assert updated_user.status == "away"
+  end
+
+  test "reuses the cached user without a second database lookup" do
+    claims = %{"sub" => "cached-sync", "email" => "cached-sync@example.com"}
+
+    assert {:ok, %User{} = first} = Identity.sync_user(claims, %{})
+    Repo.delete!(first)
+
+    assert {:ok, %User{} = second} = Identity.sync_user(claims, %{})
+    assert second.id == first.id
+    assert second.email == "cached-sync@example.com"
+  end
+
+  test "re-syncs when claim fingerprint changes" do
+    assert {:ok, first} =
+             Identity.sync_user(
+               %{"sub" => "fingerprint-user", "email" => "before-fp@example.com"},
+               %{}
+             )
+
+    assert {:ok, second} =
+             Identity.sync_user(
+               %{"sub" => "fingerprint-user", "email" => "after-fp@example.com"},
+               %{}
+             )
+
+    assert second.id == first.id
+    assert second.email == "after-fp@example.com"
   end
 end

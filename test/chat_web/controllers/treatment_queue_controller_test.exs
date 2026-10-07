@@ -65,9 +65,45 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     assert Map.has_key?(first_item, "status")
     assert Map.has_key?(first_item, "assigned_agent_id")
     assert Map.has_key?(first_item, "assigned_agent_name")
+    assert Map.has_key?(first_item, "customer_name")
     assert first_item["can_assign"] == true
     refute Map.has_key?(first_item, "messages")
     refute Map.has_key?(first_item, "attachments")
+  end
+
+  test "queue customer_name uses cache only and stays null on Orders API miss", %{
+    conn: conn,
+    agent: agent,
+    treatment_1: treatment_1
+  } do
+    Application.put_env(:chat, :orders_api,
+      base_url: "http://orders.test",
+      request_options: [plug: {Req.Test, __MODULE__}, retry: false]
+    )
+
+    on_exit(fn -> Application.delete_env(:chat, :orders_api) end)
+
+    {:ok, attempts} = Agent.start_link(fn -> 0 end)
+
+    Req.Test.stub(__MODULE__, fn req_conn ->
+      Agent.update(attempts, &(&1 + 1))
+      Plug.Conn.send_resp(req_conn, 502, "bad gateway")
+    end)
+
+    conn =
+      conn
+      |> put_req_header("authorization", "Bearer queue-token")
+      |> assign(:current_user, agent)
+      |> TreatmentQueueController.index(%{})
+
+    item =
+      conn
+      |> json_response(200)
+      |> Map.fetch!("items")
+      |> Enum.find(&(&1["treatment_id"] == treatment_1.id))
+
+    assert item["customer_name"] == nil
+    assert Agent.get(attempts, & &1) == 0
   end
 
   test "includes the structured treatment reason in queue items", %{
@@ -255,10 +291,10 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     resolved_response =
       conn
       |> assign(:current_user, owner)
-      |> TreatmentQueueController.index(%{"status" => "resolved"})
+      |> TreatmentQueueController.index(%{"status" => "pending_confirmation"})
       |> json_response(200)
 
-    assert [%{"treatment_id" => resolved_id, "status" => "resolved"}] =
+    assert [%{"treatment_id" => resolved_id, "status" => "pending_confirmation"}] =
              resolved_response["items"]
 
     assert resolved_id == resolved.id
@@ -293,7 +329,7 @@ defmodule ChatWeb.TreatmentQueueControllerTest do
     resolved_response =
       conn
       |> assign(:current_user, agent)
-      |> TreatmentQueueController.index(%{"status" => "resolved"})
+      |> TreatmentQueueController.index(%{"status" => "pending_confirmation"})
       |> json_response(200)
 
     assert [%{"treatment_id" => resolved_id}] = resolved_response["items"]

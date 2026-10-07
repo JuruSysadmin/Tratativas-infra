@@ -3,6 +3,7 @@ defmodule ChatWeb.TreatmentQueueController do
 
   use ChatWeb, :controller
 
+  alias Chat.Orders.CustomerNames
   alias Chat.Treatments
   alias Chat.Treatments.Authorization
 
@@ -11,10 +12,10 @@ defmodule ChatWeb.TreatmentQueueController do
 
     case Treatments.list_queue(user, params) do
       {:ok, %{items: treatments, pagination: pagination, counts: counts}} ->
-        customer_names =
-          treatments
-          |> Enum.map(& &1.order_id)
-          |> Chat.Orders.CustomerNames.resolve(authorization_header(conn))
+        order_ids = Enum.map(treatments, & &1.order_id)
+        authorization = authorization_header(conn)
+        customer_names = CustomerNames.resolve_cached(order_ids)
+        _ = CustomerNames.warm_async(order_ids, authorization)
 
         items =
           Enum.map(treatments, fn t ->

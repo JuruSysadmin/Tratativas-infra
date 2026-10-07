@@ -49,12 +49,12 @@ fila `treatment:created`, em todos os replies bem-sucedidos e nos broadcasts de
 transição.
 
 Campos obrigatórios: `id: string` (igual a `treatment_id`), `treatment_id: string`, `room_id: string`, `order_id: integer`,
-`protocol: string`, `status: "open" | "in_progress" | "resolved" | "closed"`,
+`protocol: string`, `status: "open" | "in_progress" | "pending_confirmation" | "resolved" | "closed"`,
 `assigned_agent_id: string | null`, `assigned_agent_username: string | null`,
 `assigned_agent_name: string | null` (alias compatível, mesmo valor),
 `assigned_at: datetime | null`, `resolved_by_id: string | null`,
 `resolved_at: datetime | null`, `closed_by_id: string | null`,
-`closed_at: datetime | null`, `inserted_at: datetime`,
+`closed_at: datetime | null`, `sla_paused_seconds: integer`, `inserted_at: datetime`,
 `can_assign: boolean`, `reason: {code: string, label: string, priority: string} | null`.
 
 `assigned_agent_name` permanece apenas para compatibilidade com a fila. A fonte
@@ -70,14 +70,18 @@ podem divergir. `can_assign` é uma projeção de UI, não autorização.
 - Comando `treatment:transfer`: requer `target_agent_id: string`. Reply e broadcast
   `treatment:transferred` usam `Treatment` pós-transferência.
 - Comando `treatment:resolve`: não requer campos. Reply e broadcast
-  `treatment:resolved` usam `Treatment` com `resolved_by_id` e `resolved_at`
-  persistidos.
+  `treatment:resolved` usam `Treatment` com status `pending_confirmation`,
+  `resolved_by_id` e `resolved_at` persistidos. O nome do evento permanece
+  `treatment:resolved`; o status persistido é `pending_confirmation` até a
+  confirmação comercial.
 - Comando `treatment:reopen`: não requer campos. Reply e broadcast
   `treatment:reopened` usam `Treatment` com `resolved_by_id: null` e
-  `resolved_at: null`; assignment é preservado.
+  `resolved_at: null`; assignment é preservado. Aceita reabrir a partir de
+  `pending_confirmation`, `resolved` ou `closed`.
 - Comando `treatment:close` e `treatment:confirm_resolution`: não requerem campos.
   Reply e broadcast `treatment:closed` usam `Treatment` com `closed_by_id` e
-  `closed_at` persistidos.
+  `closed_at` persistidos. `confirm_resolution` fecha a partir de
+  `pending_confirmation` (ou `resolved` legado).
 
 Em erro, o reply é `{reason: string}` e não há broadcast. Retry idempotente de
 atribuição retorna o estado persistido sem novo broadcast.

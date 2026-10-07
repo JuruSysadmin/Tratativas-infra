@@ -1,17 +1,7 @@
 defmodule ChatWeb.Router do
-  @moduledoc "Routes and request pipelines for the Chat web interface."
+  @moduledoc "Routes and request pipelines for the Chat API and health endpoints."
 
   use ChatWeb, :router
-
-  import Phoenix.LiveView.Router
-
-  pipeline :browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-  end
 
   pipeline :api do
     plug :accepts, ["json"]
@@ -26,25 +16,6 @@ defmodule ChatWeb.Router do
 
     get "/health", HealthController, :health
     get "/ready", HealthController, :ready
-  end
-
-  scope "/", ChatWeb do
-    pipe_through :browser
-
-    live_session :public do
-      live "/", LoginLive, :index
-    end
-
-    live_session :authenticated, on_mount: [{ChatWeb.UserAuth, :ensure_authenticated}] do
-      live "/home", HomeLive, :index
-      live "/tratativas", TreatmentLive, :index
-      live "/tratativas/:id", TreatmentLive, :show
-      live "/chat", ChatLive, :index
-      live "/perfil", ProfileLive, :index
-    end
-
-    post "/session", SessionController, :create
-    delete "/session", SessionController, :delete
   end
 
   scope "/api/auth", ChatWeb do

@@ -435,10 +435,10 @@ defmodule Chat.Treatments do
     query
     |> exclude(:preload)
     |> exclude(:order_by)
-    |> select([t], {t.id, t.status})
-    |> distinct(true)
+    |> group_by([t], t.status)
+    |> select([t], {t.status, count(t.id, :distinct)})
     |> Repo.all()
-    |> Enum.frequencies_by(fn {_id, status} -> status end)
+    |> Map.new()
     |> then(fn counts ->
       %{
         "active" => Map.get(counts, "open", 0) + Map.get(counts, "in_progress", 0),

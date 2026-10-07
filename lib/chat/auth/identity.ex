@@ -2,6 +2,7 @@ defmodule Chat.Auth.Identity do
   @moduledoc false
 
   alias Chat.Accounts
+  alias Chat.Auth.IdentityCache
 
   def sync_user(%{"sub" => subject} = claims, provider_response)
       when is_binary(subject) and subject != "" and is_map(provider_response) do
@@ -18,13 +19,42 @@ defmodule Chat.Auth.Identity do
         auth_subject: subject
       }
 
-      Accounts.find_or_create_external_user(attrs)
+      fingerprint = fingerprint(attrs)
+
+      case IdentityCache.get("external", subject) do
+        {:ok, user, ^fingerprint} ->
+          {:ok, user}
+
+        _miss_or_stale ->
+          with {:ok, user} <- Accounts.find_or_create_external_user(attrs) do
+            IdentityCache.put("external", subject, user, fingerprint)
+            {:ok, user}
+          end
+      end
     else
       :error -> {:error, :invalid_claims}
     end
   end
 
   def sync_user(_claims, _provider_response), do: {:error, :invalid_claims}
+
+  defp fingerprint(attrs) do
+    [
+      attrs.email,
+      attrs.username,
+      attrs.matricula,
+      attrs.codusur,
+      attrs.filial,
+      attrs.auth_provider,
+      attrs.auth_subject
+    ]
+    |> Enum.map_join("|", fn
+      nil -> ""
+      value -> to_string(value)
+    end)
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
 
   defp stringify(nil), do: {:ok, nil}
   defp stringify(value) when is_binary(value), do: {:ok, value}

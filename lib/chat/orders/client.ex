@@ -3,6 +3,12 @@ defmodule Chat.Orders.Client do
 
   @type customer_summary :: %{customer_id: integer(), customer_name: String.t()}
 
+  # Queue enrichment must not stall on a slow/down Orders FaaS. Callers that need
+  # richer data (preview) still use this client — fail-fast is preferable to
+  # cascading retries that freeze the treatment queue for seconds.
+  @default_request_options [retry: false, receive_timeout: 500]
+  @default_many_timeout 800
+
   @spec get(integer(), String.t()) :: {:ok, customer_summary()} | {:error, atom()}
   def get(order_id, authorization_header)
       when is_integer(order_id) and is_binary(authorization_header) do
@@ -30,7 +36,7 @@ defmodule Chat.Orders.Client do
     |> Task.async_stream(
       fn order_id -> {order_id, get(order_id, authorization_header)} end,
       max_concurrency: Keyword.get(opts, :max_concurrency, 15),
-      timeout: Keyword.get(opts, :timeout, 5_000),
+      timeout: Keyword.get(opts, :timeout, @default_many_timeout),
       on_timeout: :kill_task
     )
     |> Enum.reduce(%{}, fn
@@ -44,7 +50,11 @@ defmodule Chat.Orders.Client do
     base_url = Keyword.get(config, :base_url, System.get_env("ORDERS_API_URL"))
 
     if is_binary(base_url) and base_url != "" do
-      {:ok, String.trim_trailing(base_url, "/"), Keyword.get(config, :request_options, [])}
+      request_options =
+        @default_request_options
+        |> Keyword.merge(Keyword.get(config, :request_options, []))
+
+      {:ok, String.trim_trailing(base_url, "/"), request_options}
     else
       {:error, :not_configured}
     end

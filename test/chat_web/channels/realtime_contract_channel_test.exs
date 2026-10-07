@@ -80,6 +80,7 @@ defmodule ChatWeb.RealtimeContractChannelTest do
       :resolved_at,
       :closed_by_id,
       :closed_at,
+      :sla_paused_seconds,
       :inserted_at,
       :can_assign,
       :reason
@@ -101,7 +102,7 @@ defmodule ChatWeb.RealtimeContractChannelTest do
     assert_push "treatment:resolved", broadcast_payload
     assert reply_payload == broadcast_payload
     assert Map.keys(reply_payload) |> Enum.sort() == Enum.sort(expected_keys)
-    assert reply_payload.status == "resolved"
+    assert reply_payload.status == "pending_confirmation"
     assert reply_payload.assigned_at == assigned.assigned_at
     assert reply_payload.resolved_by_id == agent.id
     assert is_struct(Repo.get!(Treatment, treatment.id), Treatment)

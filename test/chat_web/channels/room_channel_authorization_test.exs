@@ -167,7 +167,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     assert %{
              treatment_id: ^treatment_id,
-             status: "resolved",
+             status: "pending_confirmation",
              assigned_agent_id: ^agent_id,
              assigned_agent_username: ^agent_username,
              assigned_at: ^assigned_at,
@@ -178,7 +178,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert resolved_at != nil
 
     assert %{
-             status: "resolved",
+             status: "pending_confirmation",
              resolved_by_id: ^agent_id,
              resolved_at: ^resolved_at,
              assigned_agent_id: ^agent_id,
@@ -513,7 +513,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert Messages.list_messages_for_member(current_agent.id, room.id) != []
 
     resolve_ref = push(target_socket, "treatment:resolve", %{})
-    assert_reply resolve_ref, :ok, %{status: "resolved"}
+    assert_reply resolve_ref, :ok, %{status: "pending_confirmation"}
   end
 
   test "current agent without room membership receives not_found" do
@@ -757,7 +757,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert {:reply, {:error, %{reason: "not_found"}}, ^socket} =
              RoomChannel.handle_in("treatment:reopen", %{}, socket)
 
-    assert Repo.get!(Treatment, treatment.id).status == "resolved"
+    assert Repo.get!(Treatment, treatment.id).status == "pending_confirmation"
     assert reopened_audit_count(treatment, owner) == 0
     assert Repo.get!(Treatment, treatment.id).assigned_at == resolved.assigned_at
   end
@@ -891,7 +891,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
              })
              |> Repo.update()
 
-    assert stale_resolved.status == "resolved"
+    assert stale_resolved.status == "pending_confirmation"
     assert persisted_in_progress.status == "in_progress"
 
     {:ok, _reply, socket} =
@@ -996,14 +996,14 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
 
     assert_push "treatment:resolved", %{
       treatment_id: treatment_id,
-      status: "resolved",
+      status: "pending_confirmation",
       resolved_by_id: resolved_by_id,
       resolved_at: resolved_at
     }
 
     assert_push "treatment:resolved", %{
       treatment_id: ^treatment_id,
-      status: "resolved",
+      status: "pending_confirmation",
       resolved_by_id: ^resolved_by_id,
       resolved_at: ^resolved_at
     }
@@ -1027,7 +1027,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert stale_assigned.status == "in_progress"
     assert {:ok, resolved} = Treatments.resolve(stale_assigned, agent)
     assert stale_assigned.status == "in_progress"
-    assert resolved.status == "resolved"
+    assert resolved.status == "pending_confirmation"
 
     {:ok, _reply, socket} =
       UserSocket
@@ -1116,7 +1116,11 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
     assert_reply ref, :error, %{reason: "invalid_status"}
     refute_push "treatment:resolved", _payload
 
-    assert %{status: "resolved", resolved_by_id: resolved_by_id, resolved_at: resolved_at} =
+    assert %{
+             status: "pending_confirmation",
+             resolved_by_id: resolved_by_id,
+             resolved_at: resolved_at
+           } =
              Repo.get!(Treatment, treatment.id)
 
     assert resolved_by_id == resolved.resolved_by_id
@@ -1190,10 +1194,10 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
         "status" => "closed"
       })
 
-    assert_reply ref, :ok, %{status: "resolved", resolved_at: resolved_at}
+    assert_reply ref, :ok, %{status: "pending_confirmation", resolved_at: resolved_at}
     refute to_string(resolved_at) == "2000-01-01T00:00:00Z"
 
-    assert %{status: "resolved", resolved_at: persisted_resolved_at} =
+    assert %{status: "pending_confirmation", resolved_at: persisted_resolved_at} =
              Repo.get!(Treatment, assigned.id)
 
     assert persisted_resolved_at == resolved_at
@@ -1654,7 +1658,7 @@ defmodule ChatWeb.RoomChannelAuthorizationTest do
              room_id: ^room_id,
              id: ^treatment_id,
              treatment_id: ^treatment_id,
-             status: "resolved",
+             status: "pending_confirmation",
              assigned_agent_id: ^agent_id,
              assigned_agent_username: ^agent_username,
              assigned_at: ^assigned_at,

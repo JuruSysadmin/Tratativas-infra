@@ -2,16 +2,24 @@ import Config
 
 config :ex_aws, http_client: Chat.ExAwsHackneyClient
 
-# Configure your database
 config :chat, Chat.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "127.0.0.1",
-  database: "chat",
-  port: 5432,
-  stacktrace: true,
-  show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+username: "jurunense",
+password: "@lfa2020$",
+hostname: "pg.jurunense.com",
+database: "jurunense",
+port: 7432,
+ssl: true,
+ssl: [
+  verify: :verify_peer,
+  cacerts: :public_key.cacerts_get(),
+  customize_hostname_check: [
+    match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+  ]
+],
+stacktrace: true,
+show_sensitive_data_on_connection_error: true,
+pool_size: 50
+
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

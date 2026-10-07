@@ -56,9 +56,13 @@ defmodule Chat.Accounts do
   end
 
   defp update_external_user(user, attrs) do
-    user
-    |> User.external_auth_changeset(attrs)
-    |> Repo.update()
+    changeset = User.external_auth_changeset(user, attrs)
+
+    if changeset.changes == %{} do
+      {:ok, user}
+    else
+      Repo.update(changeset)
+    end
   end
 
   defp legacy_external_user(email, "external") do

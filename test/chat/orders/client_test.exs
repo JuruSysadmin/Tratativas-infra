@@ -74,4 +74,16 @@ defmodule Chat.Orders.ClientTest do
              2 => %{customer_name: "Cliente 2"}
            } = Client.get_many([1, 2, 3], "Bearer jwt-token")
   end
+
+  test "502 does not retry — fail-fast single attempt" do
+    {:ok, attempts} = Agent.start_link(fn -> 0 end)
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      Agent.update(attempts, &(&1 + 1))
+      Plug.Conn.send_resp(conn, 502, "bad gateway")
+    end)
+
+    assert {:error, :unavailable} = Client.get(999, "Bearer jwt-token")
+    assert Agent.get(attempts, & &1) == 1
+  end
 end
