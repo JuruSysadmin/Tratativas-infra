@@ -252,3 +252,9 @@
 2026-10-07T19:43:27Z	JuruSysadmin	started	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	
 2026-10-07T19:45:16Z	JuruSysadmin	accepted	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	
 2026-10-07T19:45:16Z	JuruSysadmin	accepted	tratativas-infra/UserSocket-loga-motivo-e-frontend-recupera-token-no-REFUSED.md	
+2026-10-07T21:57:07Z	JuruSysadmin	created	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	target=icebox position=bottom
+2026-10-07T21:57:07Z	JuruSysadmin	estimate	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	3
+2026-10-07T21:57:07Z	JuruSysadmin	set-type	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	feature
+2026-10-07T21:57:25Z	JuruSysadmin	started	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	
+2026-10-07T21:59:40Z	JuruSysadmin	finished	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	Canal presence:global + Presence.track_online; 11 testes Presence/canal passando.
+2026-10-07T21:59:40Z	JuruSysadmin	delivered	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	Contrato realtime pronto para o frontend assinar presence:global.

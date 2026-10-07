@@ -8,6 +8,7 @@ defmodule ChatWeb.UserSocket do
   alias Chat.Auth.Authenticator
 
   channel "room:*", ChatWeb.RoomChannel
+  channel "presence:global", ChatWeb.GlobalPresenceChannel
   channel "treatments:queue", ChatWeb.TreatmentQueueChannel
   channel "user:*", ChatWeb.UserChannel
 

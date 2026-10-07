@@ -22,6 +22,17 @@ defmodule ChatWeb.Presence do
   end
 
   @doc """
+  Tracks a user on the socket topic with online-only metadata (no typing).
+  """
+  def track_online(%Phoenix.Socket{} = socket, user) do
+    track(socket, presence_key(user.id), online_meta(user))
+  end
+
+  def track_online(pid, topic, user) when is_pid(pid) do
+    track(pid, topic, presence_key(user.id), online_meta(user))
+  end
+
+  @doc """
   Updates the typing flag for a user on a topic, preserving existing metadata.
   """
   def update_typing(%Phoenix.Socket{} = socket, user, typing?) do
@@ -72,6 +83,14 @@ defmodule ChatWeb.Presence do
       username: user.username,
       joined_at: DateTime.utc_now(),
       typing: false
+    }
+  end
+
+  defp online_meta(user) do
+    %{
+      id: user.id,
+      username: user.username,
+      joined_at: DateTime.utc_now()
     }
   end
 

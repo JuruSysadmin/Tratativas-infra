@@ -113,4 +113,15 @@ defmodule ChatWeb.PresenceTest do
     assert length(typing) == 1
     assert hd(typing).id == bob.id
   end
+  test "track_online/3 tracks without typing metadata", %{topic: topic} do
+    user = %{id: "user-1", username: "alice"}
+
+    {:ok, _} = Presence.track_online(self(), topic, user)
+
+    assert [meta] = Presence.list_online_users(topic)
+    assert meta.id == "user-1"
+    assert meta.username == "alice"
+    assert meta.joined_at
+    refute Map.has_key?(meta, :typing)
+  end
 end
