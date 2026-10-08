@@ -19,7 +19,7 @@ defmodule Chat.Messages do
 
   alias Chat.Repo
   alias Chat.Rooms
-  alias Chat.Rooms.{Room, RoomMember}
+  alias Chat.Rooms.{MembershipCache, Room, RoomMember}
   alias Chat.Treatments.{Authorization, Treatment}
   alias Ecto.Multi
 
@@ -579,6 +579,8 @@ defmodule Chat.Messages do
         {:ok, []}
 
       rows ->
+        user_ids = rows |> Enum.map(& &1.mentioned_user_id) |> Enum.uniq()
+        :ok = ensure_room_memberships(repo, message.room_id, user_ids)
         {_count, _mentions} = repo.insert_all(Mention, rows)
 
         mentions =
@@ -628,6 +630,7 @@ defmodule Chat.Messages do
 
     rows = mention_rows(repo, message)
     current_mentioned_user_ids = Enum.map(rows, & &1.mentioned_user_id) |> Enum.uniq()
+    :ok = ensure_room_memberships(repo, message.room_id, current_mentioned_user_ids)
 
     {_count, _deleted} =
       repo.delete_all(from mention in Mention, where: mention.message_id == ^message.id)
@@ -653,12 +656,8 @@ defmodule Chat.Messages do
   defp mentionable_users_by_handle(_repo, _room_id, []), do: %{}
 
   defp mentionable_users_by_handle(repo, room_id, handles) do
-    User
-    |> join(:inner, [user], membership in RoomMember, on: membership.user_id == user.id)
-    |> where([_user, membership], membership.room_id == ^room_id)
-    |> order_by([user], asc: user.id)
-    |> lock("FOR SHARE")
-    |> repo.all()
+    handles
+    |> mention_candidate_users(repo, room_id)
     |> Enum.filter(&MentionParser.mentionable?(&1.username))
     |> Enum.group_by(&MentionParser.normalize(&1.username))
     |> Map.take(handles)
@@ -666,6 +665,41 @@ defmodule Chat.Messages do
       {handle, [user]} -> {handle, user}
       {handle, _ambiguous_users} -> {handle, nil}
     end)
+  end
+
+  defp mention_candidate_users(handles, repo, room_id) do
+    room_members =
+      User
+      |> join(:inner, [user], membership in RoomMember, on: membership.user_id == user.id)
+      |> where([_user, membership], membership.room_id == ^room_id)
+      |> order_by([user], asc: user.id)
+      |> lock("FOR SHARE")
+      |> repo.all()
+
+    global_matches =
+      User
+      |> where([user], fragment("lower(?) = ANY(?)", user.username, ^handles))
+      |> order_by([user], asc: user.id)
+      |> lock("FOR SHARE")
+      |> repo.all()
+
+    Enum.uniq_by(room_members ++ global_matches, & &1.id)
+  end
+
+  defp ensure_room_memberships(_repo, _room_id, []), do: :ok
+
+  defp ensure_room_memberships(repo, room_id, user_ids) do
+    Enum.each(user_ids, fn user_id ->
+      repo.insert(
+        RoomMember.changeset(%RoomMember{}, %{user_id: user_id, room_id: room_id}),
+        on_conflict: :nothing,
+        conflict_target: [:user_id, :room_id]
+      )
+
+      MembershipCache.put(user_id, room_id, true)
+    end)
+
+    :ok
   end
 
   defp broadcast_mentions_created(_broadcaster, _message, []), do: :ok

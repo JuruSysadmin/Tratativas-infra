@@ -258,3 +258,9 @@
 2026-10-07T21:57:25Z	JuruSysadmin	started	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	
 2026-10-07T21:59:40Z	JuruSysadmin	finished	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	Canal presence:global + Presence.track_online; 11 testes Presence/canal passando.
 2026-10-07T21:59:40Z	JuruSysadmin	delivered	tratativas-infra/Expor-Presence-global-via-canal-presence-global.md	Contrato realtime pronto para o frontend assinar presence:global.
+2026-10-08T13:48:39Z	JuruSysadmin	created	tratativas-infra/Mencao-global-auto-join-room-members-e-notifica.md	target=icebox position=bottom
+2026-10-08T13:48:39Z	JuruSysadmin	estimate	tratativas-infra/Mencao-global-auto-join-room-members-e-notifica.md	5
+2026-10-08T13:48:39Z	JuruSysadmin	set-type	tratativas-infra/Mencao-global-auto-join-room-members-e-notifica.md	feature
+2026-10-08T13:48:39Z	JuruSysadmin	started	tratativas-infra/Mencao-global-auto-join-room-members-e-notifica.md	
+2026-10-08T13:52:22Z	JuruSysadmin	finished	tratativas-infra/Mencao-global-auto-join-room-members-e-notifica.md	mentionable global + auto-join room_members; 16 testes mentions OK.
+2026-10-08T13:52:22Z	JuruSysadmin	delivered	tratativas-infra/Mencao-global-auto-join-room-members-e-notifica.md	Mencionar nao-membro grava mention, entra na sala e notifica.

@@ -2,14 +2,18 @@ defmodule Chat.Messages.MentionsTest do
   use Chat.DataCase, async: false
 
   alias Chat.Auth.Identity
+  alias Chat.Auth.IdentityCache
   alias Chat.Messages
   alias Chat.Rooms
 
   setup do
-    {:ok, author} = Identity.sync_user(%{"sub" => "mention-author"}, %{})
-    {:ok, mentioned} = Identity.sync_user(%{"sub" => "mention-target"}, %{})
-    {:ok, outsider} = Identity.sync_user(%{"sub" => "mention-outsider"}, %{})
-    {:ok, room} = Rooms.create_room(%{"name" => "Menções"}, author.id)
+    IdentityCache.clear()
+    suffix = System.unique_integer([:positive])
+
+    {:ok, author} = Identity.sync_user(%{"sub" => "mention-author-#{suffix}"}, %{})
+    {:ok, mentioned} = Identity.sync_user(%{"sub" => "mention-target-#{suffix}"}, %{})
+    {:ok, outsider} = Identity.sync_user(%{"sub" => "mention-outsider-#{suffix}"}, %{})
+    {:ok, room} = Rooms.create_room(%{"name" => "Menções #{suffix}"}, author.id)
     {:ok, _membership} = Rooms.join_room(mentioned.id, room.id)
 
     %{author: author, mentioned: mentioned, outsider: outsider, room: room}
@@ -146,7 +150,7 @@ defmodule Chat.Messages.MentionsTest do
     assert mentioned_user_id == mentioned.id
   end
 
-  test "persists only mentions targeting current room members", %{
+  test "persists mentions for room members and auto-joins global outsiders", %{
     author: author,
     mentioned: mentioned,
     outsider: outsider,
@@ -154,9 +158,40 @@ defmodule Chat.Messages.MentionsTest do
   } do
     content = "@#{mentioned.username} e @#{outsider.username}"
 
+    refute Rooms.room_member?(outsider.id, room.id)
+
     assert {:ok, message} = Messages.create_message(%{"content" => content}, author.id, room.id)
-    assert [%{mentioned_user_id: mentioned_id}] = message.mentions
-    assert mentioned_id == mentioned.id
+
+    mentioned_ids =
+      message.mentions
+      |> Enum.map(& &1.mentioned_user_id)
+      |> Enum.sort()
+
+    assert mentioned_ids == Enum.sort([mentioned.id, outsider.id])
+    assert Rooms.room_member?(outsider.id, room.id)
+
+    assert [notification] = Messages.list_mention_notifications(outsider.id)
+    assert notification.message_id == message.id
+  end
+
+  test "auto-joins a globally mentioned user who was not a room member", %{
+    author: author,
+    outsider: outsider,
+    room: room
+  } do
+    refute Rooms.room_member?(outsider.id, room.id)
+
+    assert {:ok, message} =
+             Messages.create_message(
+               %{"content" => "Oi @#{outsider.username}"},
+               author.id,
+               room.id
+             )
+
+    assert [%{mentioned_user_id: mentioned_user_id}] = message.mentions
+    assert mentioned_user_id == outsider.id
+    assert Rooms.room_member?(outsider.id, room.id)
+    assert {:ok, _notification} = Messages.get_mention_notification(outsider.id, message.id)
   end
 
   test "message creation enforces sender membership in the context", %{
